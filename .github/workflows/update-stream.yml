@@ -1,5 +1,6 @@
 name: ✅ Türkiye Yotube Canlı Yayın Güncelleme..
 
+
 on:
   schedule:
     - cron: '0 * * * *'
@@ -21,40 +22,49 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: 📦 Deno kurulumu
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: latest
+
       - name: 📦 yt-dlp kurulumu
         run: |
           python -m pip install --upgrade pip
           python -m pip install --upgrade yt-dlp
 
-      - name: 🔧 yt-dlp test
+      - name: 🔧 Versiyon kontrolü
         run: |
           yt-dlp --version
-          echo "✅ yt-dlp hazır"
+          deno --version
+
+      - name: 🍪 Cookies (opsiyonel - devre dışı)
+        run: |
+          # Cookies kullanmayacağız - yt-dlp cookies'siz çalışacak
+          echo "ℹ️ Cookies kullanılmadan devam ediliyor"
+          # Eski cookies.txt varsa sil
+          rm -f cookies.txt
 
       - name: 🎬 M3U playlist'leri oluştur
         run: |
           python update_stream.py
 
-      - name: 📊 Sonuçları kontrol et
+      - name: 📊 M3U dosyalarını kontrol et
         run: |
-          echo "=== ÇIKTILAR ==="
-          
+          echo "=== Çıktı dosyaları ==="
           if [ -f playerlist.m3u ]; then
-            KANAL_SAYISI=$(grep -c '#EXTINF' playerlist.m3u)
-            CALISAN=$(grep -c '✅' playerlist.m3u || echo "0")
             echo "✅ playerlist.m3u oluşturuldu"
-            echo "📺 Toplam kanal: $KANAL_SAYISI"
+            echo "📺 Kanal sayısı: $(grep -c '#EXTINF' playerlist.m3u)"
             echo ""
-            echo "📋 İlk 20 satır:"
-            head -20 playerlist.m3u
+            echo "📋 İlk 15 satır:"
+            head -15 playerlist.m3u
           else
             echo "❌ playerlist.m3u bulunamadı!"
             exit 1
           fi
           
-          if [ -d output ] && [ "$(ls -A output 2>/dev/null)" ]; then
+          if [ -d output ] && [ "$(ls -A output)" ]; then
             echo ""
-            echo "📁 output dizini:"
+            echo "📁 output dizini içeriği:"
             ls -la output/ | head -10
           fi
 
