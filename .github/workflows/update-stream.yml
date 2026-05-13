@@ -48,30 +48,33 @@ jobs:
 
           echo "✅ Cookies yüklendi"
 
-      - name: 🎬 M3U listelerini oluştur
+      - name: 🎬 Player klasörüne M3U listelerini oluştur
         run: |
           python update_stream.py
 
-      - name: ✅ M3U kontrol et
+      - name: ✅ Player klasörünü kontrol et
         run: |
-          if [ ! -s playerlist.m3u ]; then
-            echo "❌ playerlist.m3u oluşmadı!"
+          if [ ! -s player/playerlist.m3u ]; then
+            echo "❌ player/playerlist.m3u oluşmadı!"
+            echo "📁 Ana klasör:"
             ls -la
+            echo "📁 Player klasörü:"
+            ls -la player || true
             exit 1
           fi
 
-          echo "✅ playerlist.m3u başarıyla oluşturuldu"
-          head -40 playerlist.m3u
-          echo "📄 Oluşan M3U dosyaları:"
-          ls -1 *.m3u
+          echo "✅ player/playerlist.m3u başarıyla oluşturuldu"
+          head -40 player/playerlist.m3u
+          echo "📄 player klasöründeki M3U dosyaları:"
+          ls -1 player/*.m3u
 
       - name: 📤 GitHub'a gönder
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
-          git add *.m3u config.json update_stream.py update-stream.yml requirements.txt
+          git add player/*.m3u config.json update_stream.py requirements.txt .github/workflows/update-stream.yml
 
-          git diff --cached --quiet || git commit -m "🔄 Otomatik kanal güncelleme: $(date '+%Y-%m-%d %H:%M:%S')"
+          git diff --cached --quiet || git commit -m "🔄 Player M3U listelerini güncelle: $(date '+%Y-%m-%d %H:%M:%S')"
 
           git push
