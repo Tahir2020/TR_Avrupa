@@ -22,7 +22,7 @@ def load_config() -> Dict:
         raise ValueError("config.json içinde kanal listesi boş.")
 
     config.setdefault("quality", "best[height<=1080][fps<=50]/best")
-    config.setdefault("output_folder", "player")
+    config.setdefault("output_folder", "playlist")
     config.setdefault("output_playlist", "playerlist.m3u")
     return config
 
@@ -131,7 +131,7 @@ def main() -> int:
 
     output_folder.mkdir(parents=True, exist_ok=True)
 
-    # Eski çıktılar kalmasın diye sadece player klasöründeki m3u dosyalarını temizler.
+    # Eski çıktılar kalmasın diye sadece playlist klasöründeki m3u dosyalarını temizler.
     for old_file in output_folder.glob("*.m3u"):
         old_file.unlink()
 
