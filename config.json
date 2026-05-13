@@ -1,7 +1,6 @@
 {
   "quality": "best[height<=1080][fps<=50]/best",
   "output_playlist": "playerlist.m3u",
-  "separate_folder": ".",
   "channels": [
     {
       "name": "Star TV",
@@ -195,5 +194,6 @@
       "tvg_id": "trthaber.tr",
       "m3u_file": "TRT_Haber.m3u"
     }
-  ]
+  ],
+  "output_folder": "player"
 }
