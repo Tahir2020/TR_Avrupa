@@ -18,101 +18,19 @@ def load_config() -> Dict:
         sys.exit(1)
 
 
-def check_cookie_file():
-    """Cookie dosyasını kontrol et ve doğrula"""
-    cookie_file = 'cookies.txt'
-    
-    if not os.path.exists(cookie_file):
-        print("⚠️ cookies.txt dosyası bulunamadı!")
-        return False
-    
-    size = os.path.getsize(cookie_file)
-    if size < 100:
-        print(f"⚠️ cookies.txt çok küçük ({size} byte) - geçersiz!")
-        return False
-    
-    # Dosyanın içeriğini kontrol et
-    with open(cookie_file, 'r') as f:
-        content = f.read()
-        if '# Netscape HTTP Cookie File' not in content and '.youtube.com' not in content:
-            print("⚠️ cookies.txt geçersiz formatta!")
-            return False
-    
-    print(f"✅ cookies.txt geçerli ({size} byte)")
-    return True
-
-
 def get_stream_url(youtube_url: str, quality: str) -> Optional[str]:
     """
     YouTube canlı yayın URL'sinden m3u8 manifest adresini alır
+    Cookies OLMADAN çalışır - daha güvenilir
     """
-    # Python yt-dlp module'ünü kullan (daha güvenilir)
-    try:
-        from yt_dlp import YoutubeDL
-        
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'extract_flat': False,
-            'force_generic_extractor': False,
-            'format': quality,
-            'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['web'],
-                    'skip': ['hls', 'dash']
-                }
-            }
-        }
-        
-        with YoutubeDL(ydl_opts) as ydl:
-            try:
-                info = ydl.extract_info(youtube_url, download=False)
-                
-                # Canlı yayın mı kontrol et
-                if info.get('is_live'):
-                    # Manifest URL'sini al
-                    if 'hls_manifest_url' in info:
-                        return info['hls_manifest_url']
-                    elif 'url' in info:
-                        return info['url']
-                    elif 'formats' in info:
-                        # En iyi formatı bul
-                        for f in info['formats']:
-                            if f.get('protocol') == 'm3u8_native':
-                                return f.get('url')
-                
-                print("   📺 Yayın bulunamadı veya canlı değil")
-                return None
-                
-            except Exception as e:
-                error_msg = str(e)
-                if 'Sign in' in error_msg:
-                    print("   🔐 Oturum gerekli (cookies geçersiz)")
-                elif 'Video unavailable' in error_msg:
-                    print("   📺 Yayında değil")
-                elif 'Private' in error_msg:
-                    print("   🔒 Gizli video")
-                else:
-                    print(f"   ❌ {error_msg[:60]}")
-                return None
-                
-    except ImportError:
-        print("   ❌ yt-dlp module yok!")
-        return None
-
-
-def get_stream_url_subprocess(youtube_url: str, quality: str) -> Optional[str]:
-    """
-    Subprocess ile yt-dlp çağır (alternatif yöntem)
-    """
+    # yt-dlp komutu - cookies'siz
     cmd = [
         'yt-dlp',
         '-g',
-        '--cookies', 'cookies.txt',
-        '--extractor-args', 'youtube:player_client=web',
-        '-f', quality,
         '--no-check-certificate',
+        '--extractor-args', 'youtube:player_client=android,web',
+        '--no-cache-dir',
+        '-f', quality,
         youtube_url
     ]
     
@@ -125,35 +43,50 @@ def get_stream_url_subprocess(youtube_url: str, quality: str) -> Optional[str]:
         )
         
         if result.returncode != 0:
-            error_msg = result.stderr.strip() if result.stderr else ""
-            
-            if 'Sign in' in error_msg or 'cookies' in error_msg.lower():
-                print("   🔐 Cookie hatası")
-            elif 'Video unavailable' in error_msg:
-                print("   📺 Yayında değil")
+            # Hata detayını göster
+            error_msg = result.stderr.strip() if result.stderr else "Bilinmeyen hata"
+            if "Sign in to confirm" in error_msg:
+                print(f"   ⚠️ YouTube oturum gerektiriyor (public olmayan yayın)")
+            elif "Video unavailable" in error_msg:
+                print(f"   ⚠️ Video mevcut değil veya yayında değil")
             else:
-                short_err = error_msg.split('\n')[0][:50] if error_msg else "Hata"
-                print(f"   ❌ {short_err}")
+                print(f"   ❌ Hata: {error_msg[:100]}")
             return None
             
-        stream_url = result.stdout.strip()
-        if stream_url and ('.m3u8' in stream_url or 'googlevideo' in stream_url):
-            return stream_url
+        # Çıktıyı al
+        output = result.stdout.strip()
+        if not output:
+            print(f"   ❌ Boş çıktı")
+            return None
             
-        return None
+        # İlk satırı al (genelde video manifest)
+        stream_url = output.splitlines()[0]
         
+        # Geçerli bir m3u8 URL'si mi kontrol et
+        if stream_url and ('.m3u8' in stream_url or 'manifest' in stream_url):
+            return stream_url
+        else:
+            print(f"   ⚠️ Geçersiz URL formatı: {stream_url[:50]}...")
+            return None
+            
+    except subprocess.TimeoutExpired:
+        print(f"   ⏱️ Zaman aşımı (60 sn)")
+        return None
     except Exception as e:
-        print(f"   ❌ {str(e)[:40]}")
+        print(f"   ❌ Beklenmeyen hata: {str(e)[:100]}")
         return None
 
 
 def save_channel_m3u(channel: Dict, stream_url: str) -> bool:
+    """Her kanal için ayrı M3U dosyası oluşturur"""
     if not stream_url:
         return False
     
+    # Output dizinini oluştur
     os.makedirs('output', exist_ok=True)
     
-    safe_name = channel['channel_name'].replace(' ', '_').replace('/', '_').replace(':', '').replace('?', '').replace('(', '').replace(')', '')
+    # Güvenli dosya adı
+    safe_name = channel['channel_name'].replace(' ', '_').replace('/', '_').replace(':', '').replace('?', '')
     filename = os.path.join('output', f"{safe_name}.m3u")
     
     m3u_content = f"""#EXTM3U
@@ -165,10 +98,13 @@ def save_channel_m3u(channel: Dict, stream_url: str) -> bool:
             f.write(m3u_content)
         return True
     except Exception as e:
+        print(f"   ❌ Dosya yazma hatası: {e}")
         return False
 
 
 def save_master_playlist(channels_data: List[Dict], output_file: str) -> None:
+    """Ana playlist'i gruplandırarak oluşturur"""
+    # Gruplara ayır
     groups = {}
     for ch in channels_data:
         group = ch['group_title']
@@ -176,38 +112,34 @@ def save_master_playlist(channels_data: List[Dict], output_file: str) -> None:
             groups[group] = []
         groups[group].append(ch)
     
-    successful = sum(1 for ch in channels_data if ch.get('stream_url'))
-    
+    # M3U içeriği oluştur
     m3u_content = "#EXTM3U\n"
-    m3u_content += f"# Playlist: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-    m3u_content += f"# Toplam: {len(channels_data)} | Çalışan: {successful}\n"
-    m3u_content += f"# https://github.com/Tahir2020/TR_Avrupa\n\n"
+    m3u_content += f"# Playlist oluşturulma: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+    m3u_content += f"# Toplam kanal: {len(channels_data)}\n"
+    m3u_content += f"# Çalışan kanal: {sum(1 for ch in channels_data if ch.get('stream_url'))}\n\n"
     
     for group_name, channels in sorted(groups.items()):
-        working = sum(1 for ch in channels if ch.get('stream_url'))
-        m3u_content += f"\n# === {group_name.upper()} ({working}/{len(channels)}) ===\n"
+        m3u_content += f"\n# === {group_name.upper()} GRUBU ({len(channels)} kanal) ===\n"
         for ch in channels:
             if ch.get('stream_url'):
-                m3u_content += f'#EXTINF:-1 tvg-name="{ch["channel_name"]}" tvg-logo="{ch["channel_logo"]}" group-title="{ch["group_title"]}", {ch["channel_name"]}\n'
+                m3u_content += f'#EXTINF:-1 tvg-id="{ch["channel_name"].lower().replace(" ", "")}" tvg-name="{ch["channel_name"]}" tvg-logo="{ch["channel_logo"]}" group-title="{ch["group_title"]}", {ch["channel_name"]}\n'
                 m3u_content += f'{ch["stream_url"]}\n'
             else:
-                m3u_content += f'#EXTINF:-1 group-title="{ch["group_title"]}", ⚠️ {ch["channel_name"]}\n'
-                m3u_content += f'# OFFLINE\n'
+                m3u_content += f'#EXTINF:-1 group-title="{ch["group_title"]}", ❌ {ch["channel_name"]} (YAYINDA DEĞİL)\n'
+                m3u_content += f'# STREAM URL ALINAMADI - YouTube kanalı canlı değil veya erişim kısıtlı\n'
     
+    # Dosyaya yaz
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(m3u_content)
     
-    return successful
+    print(f"\n✅ Master playlist oluşturuldu: {output_file}")
 
 
-def process_channel(channel: Dict, quality: str, method: str = 'python') -> Dict:
-    name = channel['channel_name'][:25]
-    print(f"🔄 {name:25} | {channel['group_title']:12}", end=" ", flush=True)
+def process_channel(channel: Dict, quality: str) -> Dict:
+    """Tek bir kanalı işler"""
+    print(f"🔄 {channel['channel_name']:25} | {channel['group_title']:15}", end=" ", flush=True)
     
-    if method == 'python':
-        stream_url = get_stream_url(channel['youtube_url'], quality)
-    else:
-        stream_url = get_stream_url_subprocess(channel['youtube_url'], quality)
+    stream_url = get_stream_url(channel['youtube_url'], quality)
     
     result = channel.copy()
     result['stream_url'] = stream_url
@@ -216,103 +148,86 @@ def process_channel(channel: Dict, quality: str, method: str = 'python') -> Dict
         if save_channel_m3u(channel, stream_url):
             print("✅")
         else:
-            print("⚠️")
+            print("⚠️ (kayıt hatası)")
     else:
-        print("")  # Hata zaten print edildi
+        print("❌")
     
     return result
 
 
 def main():
     print("=" * 70)
-    print("🎬 TÜRKİYE IPTV - 23 KANAL YAYIN GÜNCELLEYİCİ")
+    print("🎬 TÜRKİYE IPTV - 24 KANAL YAYIN GÜNCELLEYİCİ (Cookies'siz)")
     print("=" * 70)
     
     config = load_config()
     channels = config['channels']
     quality = config['quality']
     
-    # Cookie kontrolü
-    cookie_valid = check_cookie_file()
-    
     print(f"\n📡 Toplam kanal: {len(channels)}")
     print(f"🎯 Kalite: {quality}")
-    print(f"🍪 Cookies: {'✅ Geçerli' if cookie_valid else '❌ Yok/Geçersiz'}")
-    
-    # Yöntem seçimi
-    use_python_module = True
-    
-    try:
-        import yt_dlp
-        print(f"📦 yt-dlp module: ✅ {yt_dlp.__version__}")
-    except ImportError:
-        use_python_module = False
-        print(f"📦 yt-dlp module: ❌ (subprocess kullanılacak)")
-    
+    print(f"🍪 Cookies: ❌ Kullanılmıyor")
     print(f"🚀 Başlıyor...\n")
-    
-    if not cookie_valid:
-        print("⚠️ UYARI: Geçerli cookies.txt bulunamadı!")
-        print("💡 YouTube artık oturum gerektiriyor.")
-        print("💡 Aşağıdaki adımları izleyin:\n")
-        print("   1. Chrome'a 'Get cookies.txt' extension yükleyin")
-        print("   2. YouTube'da oturum açın")
-        print("   3. Extension ile cookies.txt export edin")
-        print("   4. Dosyayı repo'ya koyun\n")
     
     start_time = datetime.now()
     processed = []
     
-    method = 'python' if use_python_module else 'subprocess'
-    
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = {executor.submit(process_channel, ch, quality, method): ch for ch in channels}
+    # Paralel işleme (max 3)
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {executor.submit(process_channel, ch, quality): ch for ch in channels}
         for future in as_completed(futures):
             try:
                 processed.append(future.result())
             except Exception as e:
                 ch = futures[future]
-                print(f"❌ {ch['channel_name']}: {e}")
+                print(f"❌ {ch['channel_name']} kritik hata: {e}")
                 ch_copy = ch.copy()
                 ch_copy['stream_url'] = None
                 processed.append(ch_copy)
     
-    successful = save_master_playlist(processed, 'playerlist.m3u')
+    # Master playlist oluştur
+    save_master_playlist(processed, 'playerlist.m3u')
     
+    # İstatistikler
     elapsed = (datetime.now() - start_time).total_seconds()
+    success = sum(1 for ch in processed if ch['stream_url'])
     
     print("\n" + "=" * 70)
     print("📊 TARAMA RAPORU")
     print("=" * 70)
-    print(f"✅ Başarılı: {successful}/{len(processed)} kanal")
+    print(f"✅ Başarılı: {success}/{len(processed)} kanal")
+    print(f"❌ Başarısız: {len(processed) - success}/{len(processed)} kanal")
     print(f"⏱️  Süre: {elapsed:.1f} saniye")
-    print(f"📁 Master playlist: playerlist.m3u")
     
-    # Grup bazlı
+    # Grup istatistikleri
     print("\n📺 GRUP BAZLI DURUM:")
     groups = {}
     for ch in processed:
         g = ch['group_title']
         if g not in groups:
-            groups[g] = {'total': 0, 'ok': 0}
+            groups[g] = {'total': 0, 'ok': 0, 'channels': []}
         groups[g]['total'] += 1
         if ch['stream_url']:
             groups[g]['ok'] += 1
+            groups[g]['channels'].append(ch['channel_name'])
     
     for g, stats in sorted(groups.items()):
-        icon = "✅" if stats['ok'] == stats['total'] else "⚠️" if stats['ok'] > 0 else "❌"
-        print(f"   {icon} {g:15}: {stats['ok']:2}/{stats['total']}")
+        status = "✅" if stats['ok'] == stats['total'] else "⚠️"
+        print(f"   {status} {g:15}: {stats['ok']:2}/{stats['total']}")
+        if stats['ok'] < stats['total'] and stats['channels']:
+            print(f"      Çalışan: {', '.join(stats['channels'][:3])}")
     
-    if successful > 0:
-        print(f"\n🎉 {successful} kanal başarıyla güncellendi!")
-        sys.exit(0)
+    # Çalışan kanalları göster
+    if success > 0:
+        print(f"\n🎉 {success} kanal başarıyla eklendi!")
+        print("📺 Playlist: playerlist.m3u")
     else:
-        print("\n⚠️ Hiçbir kanal çalışmıyor!")
-        print("\nÇÖZÜM:")
-        print("1. YouTube'da oturum açtığınızdan emin olun")
-        print("2. 'Get cookies.txt' extension ile yeni cookies alın")
-        print("3. cookies.txt'yi base64'e çevirip GitHub Secret'a ekleyin")
-        sys.exit(1)
+        print("\n⚠️ Hiçbir kanal çalışmıyor! Muhtemel nedenler:")
+        print("   1. YouTube kanalları şu an canlı yayında değil")
+        print("   2. YouTube coğrafi kısıtlama uyguluyor")
+        print("   3. yt-dlp güncel değil (güncellemek için: pip install -U yt-dlp)")
+    
+    sys.exit(0 if success > 0 else 1)
 
 
 if __name__ == "__main__":
