@@ -2,8 +2,8 @@ name: Türkiye IPTV - 25 Kanal Canlı Yayın Güncelleme
 
 on:
   schedule:
-    - cron: '0 * * * *'  # Her saat başı
-  workflow_dispatch:  # Manuel tetikleme
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -21,54 +21,42 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 📦 Deno kurulumu (JavaScript runtime)
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: latest
-
-      - name: 📦 yt-dlp ve bağımlılıklar
+      - name: 📦 yt-dlp kurulumu
         run: |
           python -m pip install --upgrade pip
           python -m pip install --upgrade yt-dlp
 
-      - name: 🔧 Sürüm kontrolü
+      - name: 🔧 yt-dlp test
         run: |
           yt-dlp --version
-          deno --version
-
-      - name: 🍪 YouTube Cookies çözümleme
-        run: |
-          if [ -n "${{ secrets.YOUTUBE_COOKIES }}" ]; then
-            echo "${{ secrets.YOUTUBE_COOKIES }}" | base64 -d > cookies.txt
-            if [ -s cookies.txt ]; then
-              echo "✅ cookies.txt başarıyla yüklendi ($(wc -l < cookies.txt) satır)"
-            else
-              echo "⚠️ cookies.txt oluşturuldu ancak boş!"
-              echo "Devam ediliyor (cookies olmadan dene)..."
-            fi
-          else
-            echo "⚠️ YOUTUBE_COOKIES secret'ı bulunamadı, cookies'siz devam ediliyor"
-          fi
+          echo "✅ yt-dlp hazır"
 
       - name: 🎬 M3U playlist'leri oluştur
         run: |
           python update_stream.py
 
-      - name: ✅ M3U dosyalarını kontrol et
+      - name: 📊 Sonuçları kontrol et
         run: |
-          if [ ! -s playerlist.m3u ]; then
-            echo "❌ playerlist.m3u oluşmadı veya boş!"
-            ls -la
+          echo "=== ÇIKTILAR ==="
+          
+          if [ -f playerlist.m3u ]; then
+            KANAL_SAYISI=$(grep -c '#EXTINF' playerlist.m3u)
+            CALISAN=$(grep -c '✅' playerlist.m3u || echo "0")
+            echo "✅ playerlist.m3u oluşturuldu"
+            echo "📺 Toplam kanal: $KANAL_SAYISI"
+            echo ""
+            echo "📋 İlk 20 satır:"
+            head -20 playerlist.m3u
+          else
+            echo "❌ playerlist.m3u bulunamadı!"
             exit 1
           fi
           
-          echo "✅ Ana playlist oluşturuldu"
-          echo "📊 İlk 20 satır:"
-          head -20 playerlist.m3u
-          
-          echo ""
-          echo "📁 Çıktı dizini içeriği:"
-          ls -la output/ | head -15
+          if [ -d output ] && [ "$(ls -A output 2>/dev/null)" ]; then
+            echo ""
+            echo "📁 output dizini:"
+            ls -la output/ | head -10
+          fi
 
       - name: 📤 GitHub'a gönder
         run: |
@@ -77,10 +65,10 @@ jobs:
           
           git add playerlist.m3u output/*.m3u 2>/dev/null || true
           
-          if ! git diff --cached --quiet; then
+          if git diff --cached --quiet; then
+            echo "ℹ️ Değişiklik yok"
+          else
             git commit -m "🔄 Otomatik güncelleme: $(date '+%Y-%m-%d %H:%M:%S')"
             git push
-            echo "✅ Değişiklikler GitHub'a gönderildi"
-          else
-            echo "ℹ️ Değişiklik yok, göndermeye gerek yok"
+            echo "✅ GitHub'a gönderildi"
           fi
