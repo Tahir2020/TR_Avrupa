@@ -195,5 +195,5 @@
       "m3u_file": "TRT_Haber.m3u"
     }
   ],
-  "output_folder": "player"
+  "output_folder": "playlist"
 }
