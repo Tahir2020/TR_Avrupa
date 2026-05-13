@@ -1,5 +1,4 @@
-name: ✅ Türkiye Yotube Canlı Yayın Güncelleme..
-
+name: YouTube Kanalları - Canlı Yayın Güncelleme
 
 on:
   schedule:
@@ -10,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  update-streams:
+  update-stream:
     runs-on: ubuntu-latest
 
     steps:
@@ -27,58 +26,52 @@ jobs:
         with:
           deno-version: latest
 
-      - name: 📦 yt-dlp kurulumu
+      - name: 📦 yt-dlp kur
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --upgrade yt-dlp
+          python -m pip install --upgrade -r requirements.txt
 
-      - name: 🔧 Versiyon kontrolü
+      - name: 🔧 Sürümleri kontrol et
         run: |
           yt-dlp --version
           deno --version
+          which deno
 
-      - name: 🍪 Cookies (opsiyonel - devre dışı)
+      - name: 🍪 Cookies'i çöz
         run: |
-          # Cookies kullanmayacağız - yt-dlp cookies'siz çalışacak
-          echo "ℹ️ Cookies kullanılmadan devam ediliyor"
-          # Eski cookies.txt varsa sil
-          rm -f cookies.txt
+          echo "${{ secrets.YOUTUBE_COOKIES }}" | base64 -d > cookies.txt
 
-      - name: 🎬 M3U playlist'leri oluştur
+          if [ ! -s cookies.txt ]; then
+            echo "❌ cookies.txt boş!"
+            exit 1
+          fi
+
+          echo "✅ Cookies yüklendi"
+
+      - name: 🎬 M3U listelerini oluştur
         run: |
           python update_stream.py
 
-      - name: 📊 M3U dosyalarını kontrol et
+      - name: ✅ M3U kontrol et
         run: |
-          echo "=== Çıktı dosyaları ==="
-          if [ -f playerlist.m3u ]; then
-            echo "✅ playerlist.m3u oluşturuldu"
-            echo "📺 Kanal sayısı: $(grep -c '#EXTINF' playerlist.m3u)"
-            echo ""
-            echo "📋 İlk 15 satır:"
-            head -15 playerlist.m3u
-          else
-            echo "❌ playerlist.m3u bulunamadı!"
+          if [ ! -s playerlist.m3u ]; then
+            echo "❌ playerlist.m3u oluşmadı!"
+            ls -la
             exit 1
           fi
-          
-          if [ -d output ] && [ "$(ls -A output)" ]; then
-            echo ""
-            echo "📁 output dizini içeriği:"
-            ls -la output/ | head -10
-          fi
+
+          echo "✅ playerlist.m3u başarıyla oluşturuldu"
+          head -40 playerlist.m3u
+          echo "📄 Oluşan M3U dosyaları:"
+          ls -1 *.m3u
 
       - name: 📤 GitHub'a gönder
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          
-          git add playerlist.m3u output/*.m3u 2>/dev/null || true
-          
-          if git diff --cached --quiet; then
-            echo "ℹ️ Değişiklik yok"
-          else
-            git commit -m "🔄 Otomatik güncelleme: $(date '+%Y-%m-%d %H:%M:%S')"
-            git push
-            echo "✅ GitHub'a gönderildi"
-          fi
+
+          git add *.m3u config.json update_stream.py update-stream.yml requirements.txt
+
+          git diff --cached --quiet || git commit -m "🔄 Otomatik kanal güncelleme: $(date '+%Y-%m-%d %H:%M:%S')"
+
+          git push
