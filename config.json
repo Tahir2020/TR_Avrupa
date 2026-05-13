@@ -1,0 +1,151 @@
+{
+  "channels": [
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=82O6yOy_XwE",
+      "channel_name": "Star TV",
+      "channel_logo": "https://i.postimg.cc/rFH05kkB/Star-TV-svg.png",
+      "group_title": "Ulusal Kanal"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=DWTZdz4LQbY",
+      "channel_name": "Kanal D",
+      "channel_logo": "https://i.postimg.cc/Y2bmqFyq/Logo-Kanal-D-svg.png",
+      "group_title": "Ulusal Kanal"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=XnvS-RZa4Qw",
+      "channel_name": "Show Türk",
+      "channel_logo": "https://i.postimg.cc/tR2dkHH3/Show-Turk-logo.png",
+      "group_title": "Ulusal Kanal"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=yeisTJeyDa8",
+      "channel_name": "ATV Avrupa",
+      "channel_logo": "https://dmedya.com/wp-content/uploads/2017/03/atv-avrupa-tv-logo-png-300x200.png",
+      "group_title": "Ulusal Kanal"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=HtnytvwXi5o",
+      "channel_name": "A2",
+      "channel_logo": "https://i.postimg.cc/26dw71WB/A2.png",
+      "group_title": "Ulusal Kanal"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=8vlyTcrcchc",
+      "channel_name": "NOW TV",
+      "channel_logo": "https://i.postimg.cc/SKsCFTPD/nowtv.png",
+      "group_title": "Ulusal Kanal"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=r1103_mb3Fo",
+      "channel_name": "Kanal 7",
+      "channel_logo": "https://i.postimg.cc/PrSc4SVs/In-Shot-20250209-224757709.png",
+      "group_title": "Ulusal Kanal"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=A32ePdlFt7U",
+      "channel_name": "Teve 2",
+      "channel_logo": "https://i.postimg.cc/qqqzqrbb/tv2-logo.png",
+      "group_title": "Ulusal Kanal"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=mgeW8Qm8-SY",
+      "channel_name": "A Spor",
+      "channel_logo": "https://upload.wikimedia.org/wikipedia/tr/e/e9/A_Spor_logosu.png",
+      "group_title": "Spor Kanalı"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=N75gw93XsCk",
+      "channel_name": "A Haber",
+      "channel_logo": "https://upload.wikimedia.org/wikipedia/commons/7/7c/Ahaber_Logo.png",
+      "group_title": "Haber Kanalı"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=6-Q8v_e-M2g",
+      "channel_name": "A Para",
+      "channel_logo": "https://i.tmgrup.com.tr/apara/site/v1/i/favicon.png",
+      "group_title": "Haber Kanalı"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=PD5LpRhApns",
+      "channel_name": "CNN Türk",
+      "channel_logo": "https://i.postimg.cc/QtVYDg1H/CNN-Turk-logo.png",
+      "group_title": "Haber Kanalı"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=EqoCJ8BPxtE",
+      "channel_name": "Haber Global",
+      "channel_logo": "https://www.tvlogolar.xyz/europa/turkey/haberglobal.png",
+      "group_title": "Haber Kanalı"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=hHSmBJk6w0c",
+      "channel_name": "Bloomberg HT",
+      "channel_logo": "https://i.postimg.cc/mrnNQv1X/Bloomberg-HT-logo.png",
+      "group_title": "Haber Kanalı"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=pqq5c6k70kk",
+      "channel_name": "NTV",
+      "channel_logo": "https://upload.wikimedia.org/wikipedia/commons/b/b5/NTV_logo.png",
+      "group_title": "Haber Kanalı"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=ebVRSmBYC60",
+      "channel_name": "TV100",
+      "channel_logo": "https://upload.wikimedia.org/wikipedia/tr/0/0f/TV100_logo.png",
+      "group_title": "Haber Kanalı"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=5ovykCkBWfU",
+      "channel_name": "Ekol TV",
+      "channel_logo": "https://i.postimg.cc/NFm3h7v7/Ekol-TV-Kanalinin-Logosu.png",
+      "group_title": "Haber Kanalı"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=6B-nPOdP720",
+      "channel_name": "24 TV",
+      "channel_logo": "https://www.tvlogolar.xyz/europa/turkey/24tv.png",
+      "group_title": "Haber Kanalı"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=8uNelFh0oz4",
+      "channel_name": "Halk TV",
+      "channel_logo": "https://www.tvlogolar.xyz/europa/turkey/halktv.png",
+      "group_title": "Haber Kanalı"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=ztmY_cCtUl0",
+      "channel_name": "Sözcü TV",
+      "channel_logo": "https://upload.wikimedia.org/wikipedia/tr/e/ed/SZC_TV_logo.png",
+      "group_title": "Haber Kanalı"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=YwUf2IfT4Pw",
+      "channel_name": "Ülke TV",
+      "channel_logo": "https://www.tvlogolar.xyz/europa/turkey/ulketv.png",
+      "group_title": "Haber Kanalı"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=Z5bqy4gwEmc",
+      "channel_name": "TV Net",
+      "channel_logo": "https://www.tvlogolar.xyz/europa/turkey/tvnet.png",
+      "group_title": "Haber Kanalı"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=FQ-KswvPsow",
+      "channel_name": "TGRT Haber",
+      "channel_logo": "https://www.tvlogolar.xyz/europa/turkey/tgrthaber.png",
+      "group_title": "Haber Kanalı"
+    },
+    {
+      "youtube_url": "https://www.youtube.com/watch?v=rrGdpqwEhag",
+      "channel_name": "TRT Haber",
+      "channel_logo": "https://www.tvlogolar.xyz/europa/turkey/trthaber.png",
+      "group_title": "Haber Kanalı"
+    }
+  ],
+  "quality": "best[height<=1080][fps<=50]/best",
+  "output_dir": "output",
+  "master_playlist": "playerlist.m3u"
+}
