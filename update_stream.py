@@ -22,8 +22,8 @@ def load_config() -> Dict:
         raise ValueError("config.json içinde kanal listesi boş.")
 
     config.setdefault("quality", "best[height<=1080][fps<=50]/best")
+    config.setdefault("output_folder", "player")
     config.setdefault("output_playlist", "playerlist.m3u")
-    config.setdefault("separate_folder", ".")
     return config
 
 
@@ -96,19 +96,22 @@ def create_extinf(channel: Dict, stream_url: str) -> str:
     )
 
 
-def write_single_channel_file(channel: Dict, stream_url: str, folder: Path) -> Path:
-    folder.mkdir(parents=True, exist_ok=True)
+def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Path) -> Path:
+    output_folder.mkdir(parents=True, exist_ok=True)
     filename = channel.get("m3u_file") or safe_filename(channel["name"])
-    path = folder / filename
+    path = output_folder / filename
 
     content = "#EXTM3U\n" + create_extinf(channel, stream_url)
     path.write_text(content, encoding="utf-8")
     return path
 
 
-def write_main_playlist(entries: List[str], output_file: str) -> None:
+def write_main_playlist(entries: List[str], output_folder: Path, output_playlist: str) -> Path:
+    output_folder.mkdir(parents=True, exist_ok=True)
+    path = output_folder / output_playlist
     content = "#EXTM3U\n" + "\n".join(entries)
-    Path(output_file).write_text(content, encoding="utf-8")
+    path.write_text(content, encoding="utf-8")
+    return path
 
 
 def main() -> int:
@@ -123,8 +126,14 @@ def main() -> int:
         return 1
 
     quality = config["quality"]
+    output_folder = Path(config["output_folder"])
     output_playlist = config["output_playlist"]
-    separate_folder = Path(config["separate_folder"])
+
+    output_folder.mkdir(parents=True, exist_ok=True)
+
+    # Eski çıktılar kalmasın diye sadece player klasöründeki m3u dosyalarını temizler.
+    for old_file in output_folder.glob("*.m3u"):
+        old_file.unlink()
 
     playlist_entries: List[str] = []
     failed_channels: List[str] = []
@@ -146,13 +155,13 @@ def main() -> int:
             failed_channels.append(name)
             continue
 
-        single_file = write_single_channel_file(channel, stream_url, separate_folder)
+        single_file = write_single_channel_file(channel, stream_url, output_folder)
         playlist_entries.append(create_extinf(channel, stream_url))
         print(f"✅ {name}: {single_file} oluşturuldu")
 
     if playlist_entries:
-        write_main_playlist(playlist_entries, output_playlist)
-        print(f"\n✅ Toplu liste oluşturuldu: {output_playlist}")
+        main_playlist = write_main_playlist(playlist_entries, output_folder, output_playlist)
+        print(f"\n✅ Toplu liste oluşturuldu: {main_playlist}")
         print(f"✅ Başarılı kanal sayısı: {len(playlist_entries)}")
     else:
         print("\n❌ Hiçbir kanal için manifest alınamadı")
@@ -162,7 +171,12 @@ def main() -> int:
         print("\n⚠️ Alınamayan kanallar:")
         for channel_name in failed_channels:
             print(f"- {channel_name}")
-        # Bazı kanallar geçici kapalı olabilir. Playlist yine üretildiği için workflow başarılı bitsin.
+        # Bazı kanallar ülke, gizlilik veya geçici canlı yayın sebebiyle alınamayabilir.
+        # En az bir kanal başarılıysa workflow başarılı bitsin ve player klasörü güncellensin.
+
+    print("\n📄 Oluşan M3U dosyaları:")
+    for file in sorted(output_folder.glob("*.m3u")):
+        print(f"- {file}")
 
     print("\n✅ İşlem tamamlandı")
     return 0
