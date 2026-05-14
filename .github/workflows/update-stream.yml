@@ -1,4 +1,4 @@
-name: YouTube Kanalları - Canlı Yayın Güncelleme
+name: TV Kanalları - Playlist Güncelleme
 
 on:
   schedule:
@@ -37,16 +37,15 @@ jobs:
           deno --version
           which deno
 
-      - name: 🍪 Cookies'i çöz
+      - name: 🍪 Cookies'i hazırla
         run: |
-          echo "${{ secrets.YOUTUBE_COOKIES }}" | base64 -d > cookies.txt
-
-          if [ ! -s cookies.txt ]; then
-            echo "❌ cookies.txt boş!"
-            exit 1
+          if [ -n "${{ secrets.YOUTUBE_COOKIES }}" ]; then
+            echo "${{ secrets.YOUTUBE_COOKIES }}" | base64 -d > cookies.txt
+            echo "✅ Cookies yüklendi"
+          else
+            touch cookies.txt
+            echo "⚠️ YOUTUBE_COOKIES secret yok, boş cookies.txt ile devam ediliyor"
           fi
-
-          echo "✅ Cookies yüklendi"
 
       - name: 🎬 Playlist klasörüne M3U listelerini oluştur
         run: |
