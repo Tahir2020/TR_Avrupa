@@ -6,6 +6,8 @@ import subprocess
 import sys
 import requests
 import random
+import time
+import urllib.parse
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -51,53 +53,41 @@ def is_direct_m3u8(url: str) -> bool:
 
 
 def get_atv_avrupa_token() -> Optional[str]:
-    """ATV Avrupa 576p - Tam otomatik token alıcı (HER SEFERİNDE YENİ)"""
+    """ATV Avrupa 576p - Tam otomatik token alıcı"""
     headers = {
         "X-isApp": "1",
-        "X-Rand": str(int(datetime.now().timestamp() * 1000)),
+        "X-Rand": str(int(time.time() * 1000)),
         "Origin": "https://www.atvavrupa.tv",
-        "Referer": "https://www.atvavrupa.tv/",
+        "Referer": "https://www.atvavrupa.tv/canli-yayin",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Pragma": "no-cache",
     }
     
-    # Rastgele parametre ile cache bypass
-    random_param = f"&_={random.randint(1, 999999)}"
-    
-    tokenUrl = f"https://securevideotoken.tmgrup.com.tr/webtv/secure?759173&url=https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8&url2=https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8{random_param}"
+    stream_url = "https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8"
+    encoded = urllib.parse.quote(stream_url)
+    token_url = f"https://securevideotoken.tmgrup.com.tr/webtv/secure?{random.randint(1,1000000)}&url={encoded}&url2={encoded}"
     
     try:
-        response = requests.get(tokenUrl, headers=headers, timeout=10)
+        response = requests.get(token_url, headers=headers, timeout=10)
         data = response.json()
-        token_url = data.get("Url")
         
-        if token_url:
-            # Token süresini kontrol et
-            match = re.search(r'e=(\d+)', token_url)
-            if match:
-                expire_time = datetime.fromtimestamp(int(match.group(1)))
-                if expire_time > datetime.now():
-                    print(f"   ✅ ATV Avrupa token alındı (geçerli: {expire_time.strftime('%H:%M:%S')})")
-                    return token_url
-                else:
-                    print(f"   ❌ ATV Avrupa token süresi dolmuş!")
-                    return None
-            return token_url
-        return None
+        if data.get("Success"):
+            token_url_result = data.get("Url")
+            print(f"   ✅ ATV Avrupa token alındı")
+            return token_url_result
+        else:
+            print(f"   ❌ ATV Avrupa token alınamadı")
+            return None
     except Exception as e:
-        print(f"   ❌ ATV Avrupa token hatası: {e}")
+        print(f"   ❌ ATV Avrupa hatası: {e}")
         return None
 
 
 def get_eurostar_token() -> Optional[str]:
-    """EuroStar 1080p - Tam otomatik token alıcı (HTML'den çeker, HER SEFERİNDE YENİ)"""
+    """EuroStar 1080p - HTML'den token çek (HER SEFERİNDE YENİ)"""
     
-    # 1. Adım: canli-izle sayfasından token'ı çek
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml",
-        "Referer": "https://www.eurostartv.com.tr/",
     }
     
     page_url = "https://www.eurostartv.com.tr/canli-izle"
@@ -115,9 +105,8 @@ def get_eurostar_token() -> Optional[str]:
             return None
         
         token = match.group(1)
-        print(f"   ✅ EuroStar token alındı: {token[:20]}...")
         
-        # 2. Adım: Token ile stream URL'sini al (302 redirect)
+        # Token ile stream URL'sini al (302 redirect)
         token_url = f"https://dygvideo.dygdigital.com/live/hls/staravrupa?token={token}"
         
         headers2 = {
@@ -135,7 +124,7 @@ def get_eurostar_token() -> Optional[str]:
             match = re.match(r'(.*/)live\.m3u8\?(.*)', master_url)
             if match:
                 stream_url = f"{match.group(1)}live_1080p3000000kbps/index.m3u8?{match.group(2)}"
-                print(f"   ✅ EuroStar 1080p URL oluşturuldu")
+                print(f"   ✅ EuroStar 1080p token alındı")
                 return stream_url
             return master_url
         else:
@@ -148,7 +137,7 @@ def get_eurostar_token() -> Optional[str]:
 
 
 def get_show_turk_token() -> Optional[str]:
-    """Show Türk - Tam otomatik token alıcı (HER SEFERİNDE YENİ)"""
+    """Show Türk - Tam otomatik token alıcı"""
     url = "https://www.showturk.com.tr/canli-yayin"
     pattern = r'playlist\.m3u8\?e=(\d+)&st=([^"\s&]+)'
     
@@ -160,15 +149,8 @@ def get_show_turk_token() -> Optional[str]:
         if match:
             e, st = match.groups()
             stream_url = f"https://ciner-live.ercdn.net/showturk/playlist.m3u8?e={e}&st={st}&tv=1"
-            
-            # Token süresini kontrol et
-            expire_time = datetime.fromtimestamp(int(e))
-            if expire_time > datetime.now():
-                print(f"   ✅ Show Türk token alındı (geçerli: {expire_time.strftime('%H:%M:%S')})")
-                return stream_url
-            else:
-                print(f"   ❌ Show Türk token süresi dolmuş!")
-                return None
+            print(f"   ✅ Show Türk token alındı")
+            return stream_url
         else:
             print(f"   ❌ Show Türk token bulunamadı")
             return None
@@ -222,22 +204,18 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
     
     channel_name = channel.get("name", "")
     
-    # ATV Avrupa
     if "ATV Avrupa" in channel_name:
         print("🔐 ATV Avrupa için token alınıyor...")
         return get_atv_avrupa_token()
     
-    # EuroStar / Star Avrupa
     if "Euro Star" in channel_name or "Star Avrupa" in channel_name:
         print("🔐 EuroStar için token alınıyor...")
         return get_eurostar_token()
     
-    # Show Türk
     if "Show Türk" in channel_name:
         print("🔐 Show Türk için token alınıyor...")
         return get_show_turk_token()
     
-    # Normal URL veya YouTube
     url = channel.get("url") or channel.get("youtube_url")
     
     if not url:
@@ -301,10 +279,8 @@ def main() -> int:
 
     output_folder.mkdir(parents=True, exist_ok=True)
 
-    # Eski dosyaları temizle
     for old_file in output_folder.glob("*.m3u"):
         old_file.unlink()
-        print(f"🗑️ Silindi: {old_file.name}")
 
     playlist_entries: List[str] = []
     failed_channels: List[str] = []
@@ -329,7 +305,6 @@ def main() -> int:
         playlist_entries.append(create_extinf(channel, stream_url))
         print(f"✅ {name}: {single_file} oluşturuldu")
 
-    # Ana playlist oluştur
     if playlist_entries:
         main_playlist = write_main_playlist(playlist_entries, output_folder, output_playlist)
         print(f"\n✅ Toplu liste oluşturuldu: {main_playlist}")
