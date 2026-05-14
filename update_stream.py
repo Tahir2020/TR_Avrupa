@@ -50,31 +50,28 @@ def is_direct_m3u8(url: str) -> bool:
 
 
 def get_atv_avrupa_token() -> Optional[str]:
-    """ATV Avrupa 576p token al - PowerShell kodunun birebir çevirisi"""
     headers = {
         "X-isApp": "1",
         "X-Rand": str(int(datetime.now().timestamp() * 1000)),
         "Origin": "https://www.atvavrupa.tv",
         "Referer": "https://www.atvavrupa.tv/",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     }
     
-    tokenUrl = "https://securevideotoken.tmgrup.com.tr/webtv/secure?759173&url=https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8&url2=https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8"
+    # Rastgele parametre ekleyerek cache bypass
+    random_param = f"&_={random.randint(1, 999999)}"
+    
+    tokenUrl = f"https://securevideotoken.tmgrup.com.tr/webtv/secure?759173&url=https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8&url2=https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8{random_param}"
     
     try:
         response = requests.get(tokenUrl, headers=headers, timeout=10)
         data = response.json()
-        
-        # PowerShell'deki $json.Url ile aynı
         token_url = data.get("Url")
         
         if token_url:
-            print(f"   ✅ Token alındı: {token_url[:80]}...")
+            print(f"   ✅ Yeni token alındı (timestamp: {datetime.now().strftime('%H:%M:%S')})")
             return token_url
-        else:
-            print(f"   ❌ Json'da Url bulunamadı: {data}")
-            return None
-            
+        return None
     except Exception as e:
         print(f"   ❌ Hata: {e}")
         return None
