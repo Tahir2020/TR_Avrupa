@@ -1,3 +1,6 @@
 #EXTM3U
 #EXTINF:-1 tvg-id="atvavrupa.tr" tvg-name="ATV Avrupa" tvg-logo="https://dmedya.com/wp-content/uploads/2017/03/atv-avrupa-tv-logo-png-300x200.png" group-title="Ulusal Kanallar",ATV Avrupa
-https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8?st=nJiWPrljXdKlecqj0Pu7qQ&e=1778846325
+#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+#EXTVLCOPT:http-referrer=https://www.atvavrupa.tv/canli-yayin
+#KODIPROP:inputstream.adaptive.stream_headers=User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36&Referer=https://www.atvavrupa.tv/canli-yayin&Origin=https://www.atvavrupa.tv
+https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8?st=CifsuZQInpU9DCKEzwk1Kw&e=1778846662
