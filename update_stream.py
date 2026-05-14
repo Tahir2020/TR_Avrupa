@@ -50,7 +50,7 @@ def is_direct_m3u8(url: str) -> bool:
 
 
 def get_atv_avrupa_token() -> Optional[str]:
-    """ATV Avrupa 576p token al"""
+    """ATV Avrupa 576p token al - Düzeltilmiş versiyon"""
     headers = {
         "X-isApp": "1",
         "X-Rand": str(int(datetime.now().timestamp() * 1000)),
@@ -58,34 +58,92 @@ def get_atv_avrupa_token() -> Optional[str]:
         "Referer": "https://www.atvavrupa.tv/",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
-    url = "https://securevideotoken.tmgrup.com.tr/webtv/secure?759173&url=https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8&url2=https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8"
     
-    try:
-        response = requests.get(url, headers=headers, timeout=10)
-        data = response.json()
-        return data.get("Url")
-    except Exception as e:
-        print(f"❌ ATV Avrupa token hatası: {e}")
-        return None
+    # Alternatif URL'leri dene
+    urls = [
+        "https://securevideotoken.tmgrup.com.tr/webtv/secure?759173&url=https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8&url2=https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8",
+        "https://securevideotoken.tmgrup.com.tr/webtv/secure?url=https://trkvz-live.ercdn.net/atvavrupa/atvavrupa.m3u8",
+        "https://securevideotoken.tmgrup.com.tr/webtv/secure?759173&url=https://trkvz-live.ercdn.net/atvavrupa/atvavrupa.m3u8"
+    ]
+    
+    for url in urls:
+        try:
+            print(f"   Denenen URL: {url[:80]}...")
+            response = requests.get(url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("Success") and data.get("Url"):
+                    print(f"   ✅ Token alındı (URL: {url[:50]}...)")
+                    return data.get("Url")
+                elif data.get("url"):
+                    return data.get("url")
+        except Exception as e:
+            print(f"   ❌ Hata: {str(e)[:50]}")
+            continue
+    
+    print("   ❌ Tüm URL'ler denendi, token alınamadı")
+    return None
 
 
 def get_star_avrupa_token() -> Optional[str]:
-    """Star Avrupa token al (302 redirect)"""
+    """Star Avrupa / EuroStar token al - Düzeltilmiş versiyon"""
     headers = {
         "Origin": "https://www.eurostartv.com.tr",
         "Referer": "https://www.eurostartv.com.tr/",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
-    url = "https://dygvideo.dygdigital.com/live/hls/staravrupa?token=1ef7e00fe53c90636a8da88c4614fac65b9aecc277e0d0ea"
     
+    # Farklı tokenları dene
+    tokens = [
+        "1ef7e00fe53c90636a8da88c4614fac65b9aecc277e0d0ea",
+        "",  # Boş token dene
+        "latest"  # Latest parametresi dene
+    ]
+    
+    for token in tokens:
+        if token:
+            url = f"https://dygvideo.dygdigital.com/live/hls/staravrupa?token={token}"
+        else:
+            url = "https://dygvideo.dygdigital.com/live/hls/staravrupa"
+        
+        try:
+            print(f"   Denenen URL: {url[:80]}...")
+            response = requests.get(url, headers=headers, allow_redirects=False, timeout=10)
+            
+            if response.status_code == 302:
+                location = response.headers.get("Location")
+                if location:
+                    print(f"   ✅ Token alındı (status: 302)")
+                    return location
+            elif response.status_code == 200:
+                # Direkt m3u8 gelmiş olabilir
+                if ".m3u8" in response.text:
+                    print(f"   ✅ Direkt m3u8 alındı")
+                    return response.text.strip()
+        except Exception as e:
+            print(f"   ❌ Hata: {str(e)[:50]}")
+            continue
+    
+    # Alternatif: Sayfadan çekmeyi dene
     try:
-        response = requests.get(url, headers=headers, allow_redirects=False, timeout=10)
-        if response.status_code == 302:
-            return response.headers.get("Location")
-        return None
+        print("   🔄 Sayfadan token aranıyor...")
+        page_url = "https://www.eurostartv.com.tr"
+        page_response = requests.get(page_url, headers=headers, timeout=10)
+        
+        # Sayfada m3u8 linki ara
+        m3u8_pattern = r'https?://[^"\s]+\.m3u8[^"\s]*'
+        matches = re.findall(m3u8_pattern, page_response.text)
+        
+        for match in matches:
+            if "staravrupa" in match or "eurostar" in match:
+                print(f"   ✅ Sayfadan m3u8 bulundu")
+                return match
     except Exception as e:
-        print(f"❌ Star Avrupa token hatası: {e}")
-        return None
+        print(f"   ❌ Sayfa hatası: {str(e)[:50]}")
+    
+    print("   ❌ Tüm yöntemler denendi, token alınamadı")
+    return None
 
 
 def get_show_turk_token() -> Optional[str]:
@@ -156,7 +214,7 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
         return get_atv_avrupa_token()
     
     if "Star Avrupa" in channel_name or "Euro Star" in channel_name:
-        print("🔐 Star Avrupa için token alınıyor...")
+        print("🔐 Star Avrupa/EuroStar için token alınıyor...")
         return get_star_avrupa_token()
     
     if "Show Türk" in channel_name:
