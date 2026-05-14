@@ -43,7 +43,12 @@ def safe_filename(name: str) -> str:
     return f"{name or 'channel'}.m3u"
 
 
-def get_stream_url(youtube_url: str, quality: str) -> Optional[str]:
+def is_direct_m3u8(url: str) -> bool:
+    clean = url.lower().split("?", 1)[0]
+    return clean.endswith(".m3u8")
+
+
+def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
     cmd = [
         "yt-dlp",
         "-g",
@@ -83,6 +88,19 @@ def get_stream_url(youtube_url: str, quality: str) -> Optional[str]:
         return None
 
 
+def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
+    url = channel.get("url") or channel.get("youtube_url")
+
+    if not url:
+        return None
+
+    if is_direct_m3u8(url):
+        print("🔗 Direkt m3u8 linki kullanılıyor")
+        return url
+
+    return get_youtube_stream_url(url, quality)
+
+
 def create_extinf(channel: Dict, stream_url: str) -> str:
     name = channel["name"]
     logo = channel.get("logo", "")
@@ -116,7 +134,7 @@ def write_main_playlist(entries: List[str], output_folder: Path, output_playlist
 
 def main() -> int:
     print("=" * 60)
-    print("🎬 YouTube Canlı Yayın M3U Güncelleyici")
+    print("🎬 TV Kanalları M3U Güncelleyici")
     print("=" * 60)
 
     try:
@@ -131,7 +149,6 @@ def main() -> int:
 
     output_folder.mkdir(parents=True, exist_ok=True)
 
-    # Eski çıktılar kalmasın diye sadece playlist klasöründeki m3u dosyalarını temizler.
     for old_file in output_folder.glob("*.m3u"):
         old_file.unlink()
 
@@ -140,18 +157,17 @@ def main() -> int:
 
     for index, channel in enumerate(config["channels"], start=1):
         name = channel.get("name", f"Kanal {index}")
-        youtube_url = channel.get("youtube_url")
 
-        if not youtube_url:
-            print(f"⚠️ {name}: youtube_url yok, atlandı")
+        if not (channel.get("url") or channel.get("youtube_url")):
+            print(f"⚠️ {name}: url/youtube_url yok, atlandı")
             failed_channels.append(name)
             continue
 
         print(f"\n🔄 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - [{index}/{len(config['channels'])}] {name} taranıyor...")
-        stream_url = get_stream_url(youtube_url, quality)
+        stream_url = get_stream_url(channel, quality)
 
         if not stream_url:
-            print(f"❌ {name}: Manifest URL alınamadı")
+            print(f"❌ {name}: Stream/Manifest URL alınamadı")
             failed_channels.append(name)
             continue
 
@@ -164,15 +180,13 @@ def main() -> int:
         print(f"\n✅ Toplu liste oluşturuldu: {main_playlist}")
         print(f"✅ Başarılı kanal sayısı: {len(playlist_entries)}")
     else:
-        print("\n❌ Hiçbir kanal için manifest alınamadı")
+        print("\n❌ Hiçbir kanal için link alınamadı")
         return 1
 
     if failed_channels:
         print("\n⚠️ Alınamayan kanallar:")
         for channel_name in failed_channels:
             print(f"- {channel_name}")
-        # Bazı kanallar ülke, gizlilik veya geçici canlı yayın sebebiyle alınamayabilir.
-        # En az bir kanal başarılıysa workflow başarılı bitsin ve player klasörü güncellensin.
 
     print("\n📄 Oluşan M3U dosyaları:")
     for file in sorted(output_folder.glob("*.m3u")):
