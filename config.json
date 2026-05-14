@@ -1,34 +1,43 @@
 {
   "quality": "best[height<=1080][fps<=50]/best",
+  "output_folder": "playlist",
   "output_playlist": "playerlist.m3u",
   "channels": [
     {
-      "name": "Star TV",
-      "youtube_url": "https://www.youtube.com/@StarTVResmi/live",
+      "name": "Euro Star TV",
+      "url": "https://www.youtube.com/watch?v=82O6yOy_XwE",
       "logo": "https://i.postimg.cc/rFH05kkB/Star-TV-svg.png",
       "group": "Ulusal Kanallar",
-      "tvg_id": "startv.tr",
-      "m3u_file": "Star_TV.m3u"
+      "tvg_id": "eurostar.tr",
+      "m3u_file": "Euro_Star_TV.m3u"
     },
     {
-      "name": "Kanal D",
-      "youtube_url": "https://www.youtube.com/watch?v=DWTZdz4LQbY",
+      "name": "Kanal Euro D",
+      "url": "https://live.duhnet.tv/S2/HLS_LIVE/eurodnp/playlist.m3u8",
       "logo": "https://i.postimg.cc/Y2bmqFyq/Logo-Kanal-D-svg.png",
       "group": "Ulusal Kanallar",
-      "tvg_id": "kanald.tr",
-      "m3u_file": "Kanal_D.m3u"
+      "tvg_id": "kanaleurod.tr",
+      "m3u_file": "Kanal_Euro_D.m3u"
     },
     {
       "name": "Show Türk",
-      "youtube_url": "https://www.youtube.com/watch?v=XnvS-RZa4Qw",
+      "url": "https://www.youtube.com/watch?v=XnvS-RZa4Qw",
       "logo": "https://i.postimg.cc/tR2dkHH3/Show-Turk-logo.png",
       "group": "Ulusal Kanallar",
       "tvg_id": "showturk.tr",
       "m3u_file": "Show_Turk.m3u"
     },
     {
+      "name": "Show Max",
+      "url": "https://rmtftbjlne.turknet.ercdn.net/bpeytmnqyp/showmax/showmax_1080p.m3u8",
+      "logo": "https://i.postimg.cc/PfvFKKq5/Show-MAX-logo.png",
+      "group": "Ulusal Kanallar",
+      "tvg_id": "showmax.tr",
+      "m3u_file": "Show_Max.m3u"
+    },
+    {
       "name": "ATV Avrupa",
-      "youtube_url": "https://www.youtube.com/watch?v=yeisTJeyDa8",
+      "url": "https://www.youtube.com/watch?v=yeisTJeyDa8",
       "logo": "https://dmedya.com/wp-content/uploads/2017/03/atv-avrupa-tv-logo-png-300x200.png",
       "group": "Ulusal Kanallar",
       "tvg_id": "atvavrupa.tr",
@@ -36,7 +45,7 @@
     },
     {
       "name": "A2",
-      "youtube_url": "https://www.youtube.com/watch?v=HtnytvwXi5o",
+      "url": "https://rnttwmjcin.turknet.ercdn.net/lcpmvefbyo/a2tv/a2tv_1080p.m3u8",
       "logo": "https://i.postimg.cc/26dw71WB/A2.png",
       "group": "Ulusal Kanallar",
       "tvg_id": "a2.tr",
@@ -44,23 +53,23 @@
     },
     {
       "name": "NOW",
-      "youtube_url": "https://www.youtube.com/watch?v=8vlyTcrcchc",
+      "url": "https://uycyyuuzyh.turknet.ercdn.net/nphindgytw/nowtv/nowtv_720p.m3u8",
       "logo": "https://i.postimg.cc/SKsCFTPD/nowtv.png",
       "group": "Ulusal Kanallar",
       "tvg_id": "now.tr",
       "m3u_file": "NOW.m3u"
     },
     {
-      "name": "Kanal 7",
-      "youtube_url": "https://www.youtube.com/watch?v=r1103_mb3Fo",
+      "name": "Kanal 7 Avrupa",
+      "url": "https://livetv.radyotvonline.net/kanal7live/kanal7avr/playlist.m3u8",
       "logo": "https://i.postimg.cc/PrSc4SVs/In-Shot-20250209-224757709.png",
       "group": "Ulusal Kanallar",
-      "tvg_id": "kanal7.tr",
-      "m3u_file": "Kanal_7.m3u"
+      "tvg_id": "kanal7avrupa.tr",
+      "m3u_file": "Kanal_7_Avrupa.m3u"
     },
     {
       "name": "Teve2",
-      "youtube_url": "https://www.youtube.com/watch?v=A32ePdlFt7U",
+      "url": "https://demiroren.daioncdn.net/teve2/teve2_1080p.m3u8?&sid=8a5c11fnaetz&app=6aab838a-437e-4a1b-bbd0-e30f79cdbbbd&ce=3",
       "logo": "https://i.postimg.cc/qqqzqrbb/tv2-logo.png",
       "group": "Ulusal Kanallar",
       "tvg_id": "teve2.tr",
@@ -68,7 +77,7 @@
     },
     {
       "name": "A Spor",
-      "youtube_url": "https://www.youtube.com/watch?v=mgeW8Qm8-SY",
+      "url": "https://www.youtube.com/watch?v=mgeW8Qm8-SY",
       "logo": "https://upload.wikimedia.org/wikipedia/tr/e/e9/A_Spor_logosu.png",
       "group": "Spor Kanalları",
       "tvg_id": "aspor.tr",
@@ -76,7 +85,7 @@
     },
     {
       "name": "A Haber",
-      "youtube_url": "https://www.youtube.com/watch?v=N75gw93XsCk",
+      "url": "https://www.youtube.com/watch?v=N75gw93XsCk",
       "logo": "https://upload.wikimedia.org/wikipedia/commons/7/7c/Ahaber_Logo.png",
       "group": "Haber Kanalları",
       "tvg_id": "ahaber.tr",
@@ -84,7 +93,7 @@
     },
     {
       "name": "A Para",
-      "youtube_url": "https://www.youtube.com/watch?v=6-Q8v_e-M2g",
+      "url": "https://www.youtube.com/watch?v=6-Q8v_e-M2g",
       "logo": "https://i.tmgrup.com.tr/apara/site/v1/i/favicon.png",
       "group": "Haber Kanalları",
       "tvg_id": "apara.tr",
@@ -92,7 +101,7 @@
     },
     {
       "name": "CNN Türk",
-      "youtube_url": "https://www.youtube.com/watch?v=PD5LpRhApns",
+      "url": "https://www.youtube.com/watch?v=PD5LpRhApns",
       "logo": "https://i.postimg.cc/QtVYDg1H/CNN-Turk-logo.png",
       "group": "Haber Kanalları",
       "tvg_id": "cnnturk.tr",
@@ -100,7 +109,7 @@
     },
     {
       "name": "Haber Global",
-      "youtube_url": "https://www.youtube.com/watch?v=EqoCJ8BPxtE",
+      "url": "https://www.youtube.com/watch?v=EqoCJ8BPxtE",
       "logo": "https://www.tvlogolar.xyz/europa/turkey/haberglobal.png",
       "group": "Haber Kanalları",
       "tvg_id": "haberglobal.tr",
@@ -108,7 +117,7 @@
     },
     {
       "name": "Bloomberg HT",
-      "youtube_url": "https://www.youtube.com/watch?v=hHSmBJk6w0c",
+      "url": "https://www.youtube.com/watch?v=hHSmBJk6w0c",
       "logo": "https://i.postimg.cc/mrnNQv1X/Bloomberg-HT-logo.png",
       "group": "Haber Kanalları",
       "tvg_id": "bloomberght.tr",
@@ -116,7 +125,7 @@
     },
     {
       "name": "NTV",
-      "youtube_url": "https://www.youtube.com/watch?v=pqq5c6k70kk",
+      "url": "https://www.youtube.com/watch?v=pqq5c6k70kk",
       "logo": "https://upload.wikimedia.org/wikipedia/commons/b/b5/NTV_logo.png",
       "group": "Haber Kanalları",
       "tvg_id": "ntv.tr",
@@ -124,7 +133,7 @@
     },
     {
       "name": "TV100",
-      "youtube_url": "https://www.youtube.com/watch?v=ebVRSmBYC60",
+      "url": "https://www.youtube.com/watch?v=ebVRSmBYC60",
       "logo": "https://upload.wikimedia.org/wikipedia/tr/0/0f/TV100_logo.png",
       "group": "Haber Kanalları",
       "tvg_id": "tv100.tr",
@@ -132,7 +141,7 @@
     },
     {
       "name": "Ekol TV",
-      "youtube_url": "https://www.youtube.com/watch?v=5ovykCkBWfU",
+      "url": "https://www.youtube.com/watch?v=5ovykCkBWfU",
       "logo": "https://i.postimg.cc/NFm3h7v7/Ekol-TV-Kanalinin-Logosu.png",
       "group": "Haber Kanalları",
       "tvg_id": "ekoltv.tr",
@@ -140,7 +149,7 @@
     },
     {
       "name": "24 TV",
-      "youtube_url": "https://www.youtube.com/watch?v=6B-nPOdP720",
+      "url": "https://www.youtube.com/watch?v=6B-nPOdP720",
       "logo": "https://www.tvlogolar.xyz/europa/turkey/24tv.png",
       "group": "Haber Kanalları",
       "tvg_id": "24tv.tr",
@@ -148,7 +157,7 @@
     },
     {
       "name": "Halk TV",
-      "youtube_url": "https://www.youtube.com/watch?v=8uNelFh0oz4",
+      "url": "https://www.youtube.com/watch?v=8uNelFh0oz4",
       "logo": "https://www.tvlogolar.xyz/europa/turkey/halktv.png",
       "group": "Haber Kanalları",
       "tvg_id": "halktv.tr",
@@ -156,7 +165,7 @@
     },
     {
       "name": "Sözcü TV",
-      "youtube_url": "https://www.youtube.com/watch?v=ztmY_cCtUl0",
+      "url": "https://www.youtube.com/watch?v=ztmY_cCtUl0",
       "logo": "https://upload.wikimedia.org/wikipedia/tr/e/ed/SZC_TV_logo.png",
       "group": "Haber Kanalları",
       "tvg_id": "sozcutv.tr",
@@ -164,7 +173,7 @@
     },
     {
       "name": "Ülke TV",
-      "youtube_url": "https://www.youtube.com/watch?v=YwUf2IfT4Pw",
+      "url": "https://www.youtube.com/watch?v=YwUf2IfT4Pw",
       "logo": "https://www.tvlogolar.xyz/europa/turkey/ulketv.png",
       "group": "Haber Kanalları",
       "tvg_id": "ulketv.tr",
@@ -172,7 +181,7 @@
     },
     {
       "name": "TVNET",
-      "youtube_url": "https://www.youtube.com/watch?v=Z5bqy4gwEmc",
+      "url": "https://www.youtube.com/watch?v=Z5bqy4gwEmc",
       "logo": "https://www.tvlogolar.xyz/europa/turkey/tvnet.png",
       "group": "Haber Kanalları",
       "tvg_id": "tvnet.tr",
@@ -180,7 +189,7 @@
     },
     {
       "name": "TGRT Haber",
-      "youtube_url": "https://www.youtube.com/watch?v=FQ-KswvPsow",
+      "url": "https://www.youtube.com/watch?v=FQ-KswvPsow",
       "logo": "https://www.tvlogolar.xyz/europa/turkey/tgrthaber.png",
       "group": "Haber Kanalları",
       "tvg_id": "tgrthaber.tr",
@@ -188,12 +197,11 @@
     },
     {
       "name": "TRT Haber",
-      "youtube_url": "https://www.youtube.com/watch?v=rrGdpqwEhag",
+      "url": "https://www.youtube.com/watch?v=rrGdpqwEhag",
       "logo": "https://www.tvlogolar.xyz/europa/turkey/trthaber.png",
       "group": "Haber Kanalları",
       "tvg_id": "trthaber.tr",
       "m3u_file": "TRT_Haber.m3u"
     }
-  ],
-  "output_folder": "playlist"
+  ]
 }
