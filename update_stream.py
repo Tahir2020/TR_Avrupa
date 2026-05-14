@@ -53,7 +53,6 @@ def is_direct_m3u8(url: str) -> bool:
 
 
 def get_atv_avrupa_token() -> Optional[str]:
-    """ATV Avrupa 576p - Tam otomatik token alıcı"""
     headers = {
         "X-isApp": "1",
         "X-Rand": str(int(time.time() * 1000)),
@@ -61,25 +60,29 @@ def get_atv_avrupa_token() -> Optional[str]:
         "Referer": "https://www.atvavrupa.tv/canli-yayin",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     }
-    
+
     stream_url = "https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8"
-    encoded = urllib.parse.quote(stream_url)
-    token_url = f"https://securevideotoken.tmgrup.com.tr/webtv/secure?{random.randint(1,1000000)}&url={encoded}&url2={encoded}"
-    
+    encoded = urllib.parse.quote(stream_url, safe="")
+    token_url = (
+        f"https://securevideotoken.tmgrup.com.tr/webtv/secure?"
+        f"{random.randint(1,1000000)}&url={encoded}&url2={encoded}"
+    )
+
     try:
         response = requests.get(token_url, headers=headers, timeout=10)
+        response.raise_for_status()
         data = response.json()
-        
-        if data.get("Success"):
-            token_url_result = data.get("Url")
-            print(f"   ✅ ATV Avrupa token alındı")
-            return token_url_result
-        else:
-            print(f"   ❌ ATV Avrupa token alınamadı")
-            return None
-    except Exception as e:
-        print(f"   ❌ ATV Avrupa hatası: {e}")
+
+        if data.get("Success") and data.get("Url"):
+            print("   ✅ ATV Avrupa token alındı")
+            return data["Url"]
+
+        print(f"   ❌ ATV Avrupa token alınamadı: {data}")
         return None
+
+    except Exception as e:
+            print(f"   ❌ ATV Avrupa hatası: {e}")
+            return None
 
 
 def get_eurostar_token() -> Optional[str]:
