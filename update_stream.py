@@ -4,6 +4,7 @@ import json
 import re
 import subprocess
 import sys
+import requests
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -48,6 +49,62 @@ def is_direct_m3u8(url: str) -> bool:
     return clean.endswith(".m3u8")
 
 
+def get_atv_avrupa_token() -> Optional[str]:
+    """ATV Avrupa 576p token al"""
+    headers = {
+        "X-isApp": "1",
+        "X-Rand": str(int(datetime.now().timestamp() * 1000)),
+        "Origin": "https://www.atvavrupa.tv",
+        "Referer": "https://www.atvavrupa.tv/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+    url = "https://securevideotoken.tmgrup.com.tr/webtv/secure?759173&url=https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8&url2=https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8"
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        data = response.json()
+        return data.get("Url")
+    except Exception as e:
+        print(f"❌ ATV Avrupa token hatası: {e}")
+        return None
+
+
+def get_star_avrupa_token() -> Optional[str]:
+    """Star Avrupa token al (302 redirect)"""
+    headers = {
+        "Origin": "https://www.eurostartv.com.tr",
+        "Referer": "https://www.eurostartv.com.tr/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+    url = "https://dygvideo.dygdigital.com/live/hls/staravrupa?token=1ef7e00fe53c90636a8da88c4614fac65b9aecc277e0d0ea"
+    
+    try:
+        response = requests.get(url, headers=headers, allow_redirects=False, timeout=10)
+        if response.status_code == 302:
+            return response.headers.get("Location")
+        return None
+    except Exception as e:
+        print(f"❌ Star Avrupa token hatası: {e}")
+        return None
+
+
+def get_show_turk_token() -> Optional[str]:
+    """Show Türk token al (sayfadan regex ile)"""
+    url = "https://www.showturk.com.tr/canli-yayin"
+    pattern = r'playlist\.m3u8\?e=(\d+)&st=([^"\s&]+)'
+    
+    try:
+        response = requests.get(url, timeout=10)
+        match = re.search(pattern, response.text)
+        if match:
+            e, st = match.groups()
+            return f"https://ciner-live.ercdn.net/showturk/playlist.m3u8?e={e}&st={st}&tv=1"
+        return None
+    except Exception as e:
+        print(f"❌ Show Türk token hatası: {e}")
+        return None
+
+
 def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
     cmd = [
         "yt-dlp",
@@ -89,8 +146,26 @@ def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
 
 
 def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
+    """Kanal tipine göre stream URL'sini al"""
+    
+    # Özel token gerektiren kanallar
+    channel_name = channel.get("name", "")
+    
+    if "ATV Avrupa" in channel_name:
+        print("🔐 ATV Avrupa için token alınıyor...")
+        return get_atv_avrupa_token()
+    
+    if "Star Avrupa" in channel_name or "Euro Star" in channel_name:
+        print("🔐 Star Avrupa için token alınıyor...")
+        return get_star_avrupa_token()
+    
+    if "Show Türk" in channel_name:
+        print("🔐 Show Türk için token alınıyor...")
+        return get_show_turk_token()
+    
+    # Normal URL veya YouTube
     url = channel.get("url") or channel.get("youtube_url")
-
+    
     if not url:
         return None
 
@@ -98,6 +173,7 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
         print("🔗 Direkt m3u8 linki kullanılıyor")
         return url
 
+    print("🎬 YouTube stream alınıyor...")
     return get_youtube_stream_url(url, quality)
 
 
@@ -134,7 +210,7 @@ def write_main_playlist(entries: List[str], output_folder: Path, output_playlist
 
 def main() -> int:
     print("=" * 60)
-    print("🎬 TV Kanalları M3U Güncelleyici")
+    print("🎬 TV Kanalları M3U Güncelleyici (Token Desteği Eklendi)")
     print("=" * 60)
 
     try:
