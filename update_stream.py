@@ -47,155 +47,131 @@ def safe_filename(name: str) -> str:
     return f"{name or 'channel'}.m3u"
 
 
-def normalize_text(text: str) -> str:
-    """Kanal adını küçük harfe çevirir ve Türkçe karakterleri sadeleştirir."""
-    text = text.lower()
-    replacements = {
-        "ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u",
-        "Ç": "c", "Ğ": "g", "İ": "i", "I": "i", "Ö": "o", "Ş": "s", "Ü": "u",
-    }
-    for old, new in replacements.items():
-        text = text.replace(old, new)
-    return text
-
-
 def is_direct_m3u8(url: str) -> bool:
     clean = url.lower().split("?", 1)[0]
     return clean.endswith(".m3u8")
 
 
 def get_atv_avrupa_token() -> Optional[str]:
-    """ATV Avrupa 576p - Tam otomatik token alıcı."""
-    stream_url = "https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8"
+    """ATV Avrupa 576p - çalışan token alıcı
 
+    Not: Bu fonksiyon lokal test edilen çalışan kod ile aynıdır.
+    urllib.parse.quote(stream_url) özellikle safe="" olmadan bırakıldı.
+    """
     headers = {
         "X-isApp": "1",
         "X-Rand": str(int(time.time() * 1000)),
         "Origin": "https://www.atvavrupa.tv",
         "Referer": "https://www.atvavrupa.tv/canli-yayin",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "application/json, text/plain, */*",
     }
 
-    # ÖNEMLİ: safe="" kullanılmazsa / ve : karakterleri tam encode edilmez.
-    encoded_url = urllib.parse.quote(stream_url, safe="")
-
-    token_api = (
-        "https://securevideotoken.tmgrup.com.tr/webtv/secure"
-        f"?{random.randint(1, 1000000)}"
-        f"&url={encoded_url}"
-        f"&url2={encoded_url}"
+    stream_url = "https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8"
+    encoded = urllib.parse.quote(stream_url)
+    token_url = (
+        f"https://securevideotoken.tmgrup.com.tr/webtv/secure?"
+        f"{random.randint(1,1000000)}&url={encoded}&url2={encoded}"
     )
 
     try:
-        response = requests.get(token_api, headers=headers, timeout=15)
-        print(f"   ATV status: {response.status_code}")
+        response = requests.get(token_url, headers=headers, timeout=10)
 
-        # JSON değilse ilk kısmı göster, böylece hata sebebi anlaşılır.
-        try:
-            data = response.json()
-        except Exception:
-            print(f"   ❌ ATV JSON cevap vermedi: {response.text[:300]}")
-            return None
+        # GitHub Actions loglarında ne geldiğini görmek için kısa bilgi
+        print(f"   ATV token api status: {response.status_code}")
 
-        if response.status_code != 200:
-            print(f"   ❌ ATV HTTP hata: {response.status_code} - {data}")
-            return None
+        data = response.json()
 
         if data.get("Success") and data.get("Url"):
-            token_url_result = data["Url"]
+            final_url = data.get("Url")
             print("   ✅ ATV Avrupa token alındı")
-            return token_url_result
+
+            # Token süresini logla
+            match = re.search(r"[?&]e=(\d+)", final_url)
+            if match:
+                expire = datetime.fromtimestamp(int(match.group(1)))
+                print(f"   ⏰ ATV token süresi: {expire}")
+
+            return final_url
 
         print(f"   ❌ ATV Avrupa token alınamadı: {data}")
         return None
 
-    except requests.exceptions.Timeout:
-        print("   ❌ ATV Avrupa hatası: istek zaman aşımına uğradı")
-        return None
-    except requests.exceptions.RequestException as e:
-        print(f"   ❌ ATV Avrupa bağlantı hatası: {e}")
-        return None
     except Exception as e:
         print(f"   ❌ ATV Avrupa hatası: {e}")
         return None
 
-
 def get_eurostar_token() -> Optional[str]:
-    """EuroStar 1080p - HTML'den token çek."""
+    """EuroStar 1080p - HTML'den token çek (HER SEFERİNDE YENİ)"""
+    
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml",
     }
-
+    
     page_url = "https://www.eurostartv.com.tr/canli-izle"
-
+    
     try:
         response = requests.get(page_url, headers=headers, timeout=15)
-        response.raise_for_status()
         html = response.text
-
+        
+        # Token'ı HTML'den regex ile bul
         pattern = r"var liveUrl = 'https://dygvideo\.dygdigital\.com/live/hls/staravrupa\?token=([a-f0-9]+)';"
         match = re.search(pattern, html)
-
+        
         if not match:
             print("   ❌ EuroStar token HTML'de bulunamadı")
             return None
-
+        
         token = match.group(1)
+        
+        # Token ile stream URL'sini al (302 redirect)
         token_url = f"https://dygvideo.dygdigital.com/live/hls/staravrupa?token={token}"
-
+        
         headers2 = {
             "Origin": "https://www.eurostartv.com.tr",
             "Referer": "https://www.eurostartv.com.tr/",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         }
-
+        
         response2 = requests.get(token_url, headers=headers2, allow_redirects=False, timeout=10)
-
+        
         if response2.status_code == 302:
             master_url = response2.headers.get("Location")
-            if not master_url:
-                print("   ❌ EuroStar redirect Location boş")
-                return None
-
+            
+            # 1080p URL oluştur
             match = re.match(r'(.*/)live\.m3u8\?(.*)', master_url)
             if match:
                 stream_url = f"{match.group(1)}live_1080p3000000kbps/index.m3u8?{match.group(2)}"
-                print("   ✅ EuroStar 1080p token alındı")
+                print(f"   ✅ EuroStar 1080p token alındı")
                 return stream_url
-
-            print("   ✅ EuroStar token alındı")
             return master_url
-
-        print(f"   ❌ EuroStar redirect alınamadı: {response2.status_code}")
-        return None
-
+        else:
+            print(f"   ❌ EuroStar redirect alınamadı: {response2.status_code}")
+            return None
+            
     except Exception as e:
         print(f"   ❌ EuroStar hatası: {e}")
         return None
 
 
 def get_show_turk_token() -> Optional[str]:
-    """Show Türk - Tam otomatik token alıcı."""
+    """Show Türk - Tam otomatik token alıcı"""
     url = "https://www.showturk.com.tr/canli-yayin"
     pattern = r'playlist\.m3u8\?e=(\d+)&st=([^"\s&]+)'
-
+    
     try:
         response = requests.get(url, timeout=10)
-        response.raise_for_status()
         html = response.text
         match = re.search(pattern, html)
-
+        
         if match:
             e, st = match.groups()
             stream_url = f"https://ciner-live.ercdn.net/showturk/playlist.m3u8?e={e}&st={st}&tv=1"
-            print("   ✅ Show Türk token alındı")
+            print(f"   ✅ Show Türk token alındı")
             return stream_url
-
-        print("   ❌ Show Türk token bulunamadı")
-        return None
-
+        else:
+            print(f"   ❌ Show Türk token bulunamadı")
+            return None
     except Exception as e:
         print(f"   ❌ Show Türk hatası: {e}")
         return None
@@ -242,24 +218,25 @@ def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
 
 
 def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
-    """Kanal tipine göre stream URL'sini al."""
+    """Kanal tipine göre stream URL'sini al"""
+    
     channel_name = channel.get("name", "")
-    normalized_name = normalize_text(channel_name)
+    channel_name_lower = channel_name.lower()
 
-    if "atv" in normalized_name and "avrupa" in normalized_name:
+    if "atv" in channel_name_lower and "avrupa" in channel_name_lower:
         print("🔐 ATV Avrupa için token alınıyor...")
         return get_atv_avrupa_token()
-
-    if "euro star" in normalized_name or "eurostar" in normalized_name or "star avrupa" in normalized_name:
+    
+    if "euro star" in channel_name_lower or "star avrupa" in channel_name_lower:
         print("🔐 EuroStar için token alınıyor...")
         return get_eurostar_token()
 
-    if "show turk" in normalized_name or "show türk" in channel_name.lower():
+    if "show türk" in channel_name_lower or "show turk" in channel_name_lower:
         print("🔐 Show Türk için token alınıyor...")
         return get_show_turk_token()
-
+    
     url = channel.get("url") or channel.get("youtube_url")
-
+    
     if not url:
         return None
 
