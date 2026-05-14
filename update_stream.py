@@ -53,41 +53,34 @@ def is_direct_m3u8(url: str) -> bool:
 
 
 def get_atv_avrupa_token() -> Optional[str]:
-    """ATV Avrupa 576p - çalışan lokal token kodu ile otomatik token alıcı"""
+    """ATV Avrupa 576p - Tam otomatik token alıcı"""
     headers = {
         "X-isApp": "1",
         "X-Rand": str(int(time.time() * 1000)),
         "Origin": "https://www.atvavrupa.tv",
-        "Referer": "https://www.atvavrupa.tv/canli-yayin",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://www.atvavrupa.tv/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Language": "tr,en-US;q=0.9,en;q=0.8,de;q=0.7",
+        "DNT": "1",
     }
 
     stream_url = "https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8"
-
-    # Lokal çalışan kod ile aynı: safe="" KULLANILMIYOR
     encoded = urllib.parse.quote(stream_url)
-
     token_url = (
         "https://securevideotoken.tmgrup.com.tr/webtv/secure"
-        f"?{random.randint(1, 1000000)}"
-        f"&url={encoded}"
-        f"&url2={encoded}"
+        f"?{random.randint(1, 1000000)}&url={encoded}&url2={encoded}"
     )
 
     try:
         response = requests.get(token_url, headers=headers, timeout=10)
+        print(f"   ATV token status: {response.status_code}")
+        response.raise_for_status()
         data = response.json()
 
         if data.get("Success") and data.get("Url"):
             token_url_result = data.get("Url")
             print("   ✅ ATV Avrupa token alındı")
-
-            # Token süresi varsa logla
-            match = re.search(r"e=(\d+)", token_url_result)
-            if match:
-                expire = datetime.fromtimestamp(int(match.group(1)))
-                print(f"   ⏰ ATV token süresi: {expire}")
-
             return token_url_result
 
         print(f"   ❌ ATV Avrupa token alınamadı: {data}")
@@ -219,16 +212,17 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
     """Kanal tipine göre stream URL'sini al"""
     
     channel_name = channel.get("name", "")
-    
-    if "atv" in channel_name.lower() and "avrupa" in channel_name.lower():
+    channel_name_lower = channel_name.lower()
+
+    if "atv" in channel_name_lower and "avrupa" in channel_name_lower:
         print("🔐 ATV Avrupa için token alınıyor...")
         return get_atv_avrupa_token()
-    
-    if "Euro Star" in channel_name or "Star Avrupa" in channel_name:
+
+    if "euro star" in channel_name_lower or "star avrupa" in channel_name_lower:
         print("🔐 EuroStar için token alınıyor...")
         return get_eurostar_token()
-    
-    if "Show Türk" in channel_name:
+
+    if "show türk" in channel_name_lower or "show turk" in channel_name_lower:
         print("🔐 Show Türk için token alınıyor...")
         return get_show_turk_token()
     
@@ -251,24 +245,18 @@ def create_extinf(channel: Dict, stream_url: str) -> str:
     group = channel.get("group", "Genel")
     tvg_id = channel.get("tvg_id", safe_filename(name).replace(".m3u", "").lower())
 
-    extra_headers = ""
-
-    # ATV Avrupa GitHub Actions/CDN 403 riskine karşı player header satırları
+    extra = ""
     if "atv" in name.lower() and "avrupa" in name.lower():
-        ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        ref = "https://www.atvavrupa.tv/canli-yayin"
-        origin = "https://www.atvavrupa.tv"
-
-        extra_headers = (
-            f'#EXTVLCOPT:http-user-agent={ua}\n'
-            f'#EXTVLCOPT:http-referrer={ref}\n'
-            f'#KODIPROP:inputstream.adaptive.stream_headers=User-Agent={ua}&Referer={ref}&Origin={origin}\n'
+        extra = (
+            "#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36\n"
+            "#EXTVLCOPT:http-referrer=https://www.atvavrupa.tv/\n"
+            "#KODIPROP:inputstream.adaptive.stream_headers=User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36&Referer=https://www.atvavrupa.tv/&Origin=https://www.atvavrupa.tv\n"
         )
 
     return (
         f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{name}" '
         f'tvg-logo="{logo}" group-title="{group}",{name}\n'
-        f'{extra_headers}'
+        f'{extra}'
         f'{stream_url}\n'
     )
 
