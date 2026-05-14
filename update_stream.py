@@ -53,11 +53,7 @@ def is_direct_m3u8(url: str) -> bool:
 
 
 def get_atv_avrupa_token() -> Optional[str]:
-    """ATV Avrupa 576p - çalışan token alıcı
-
-    Not: Bu fonksiyon lokal test edilen çalışan kod ile aynıdır.
-    urllib.parse.quote(stream_url) özellikle safe="" olmadan bırakıldı.
-    """
+    """ATV Avrupa 576p - çalışan lokal token kodu ile otomatik token alıcı"""
     headers = {
         "X-isApp": "1",
         "X-Rand": str(int(time.time() * 1000)),
@@ -67,31 +63,32 @@ def get_atv_avrupa_token() -> Optional[str]:
     }
 
     stream_url = "https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8"
+
+    # Lokal çalışan kod ile aynı: safe="" KULLANILMIYOR
     encoded = urllib.parse.quote(stream_url)
+
     token_url = (
-        f"https://securevideotoken.tmgrup.com.tr/webtv/secure?"
-        f"{random.randint(1,1000000)}&url={encoded}&url2={encoded}"
+        "https://securevideotoken.tmgrup.com.tr/webtv/secure"
+        f"?{random.randint(1, 1000000)}"
+        f"&url={encoded}"
+        f"&url2={encoded}"
     )
 
     try:
         response = requests.get(token_url, headers=headers, timeout=10)
-
-        # GitHub Actions loglarında ne geldiğini görmek için kısa bilgi
-        print(f"   ATV token api status: {response.status_code}")
-
         data = response.json()
 
         if data.get("Success") and data.get("Url"):
-            final_url = data.get("Url")
+            token_url_result = data.get("Url")
             print("   ✅ ATV Avrupa token alındı")
 
-            # Token süresini logla
-            match = re.search(r"[?&]e=(\d+)", final_url)
+            # Token süresi varsa logla
+            match = re.search(r"e=(\d+)", token_url_result)
             if match:
                 expire = datetime.fromtimestamp(int(match.group(1)))
                 print(f"   ⏰ ATV token süresi: {expire}")
 
-            return final_url
+            return token_url_result
 
         print(f"   ❌ ATV Avrupa token alınamadı: {data}")
         return None
@@ -99,6 +96,7 @@ def get_atv_avrupa_token() -> Optional[str]:
     except Exception as e:
         print(f"   ❌ ATV Avrupa hatası: {e}")
         return None
+
 
 def get_eurostar_token() -> Optional[str]:
     """EuroStar 1080p - HTML'den token çek (HER SEFERİNDE YENİ)"""
@@ -221,17 +219,16 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
     """Kanal tipine göre stream URL'sini al"""
     
     channel_name = channel.get("name", "")
-    channel_name_lower = channel_name.lower()
-
-    if "atv" in channel_name_lower and "avrupa" in channel_name_lower:
+    
+    if "atv" in channel_name.lower() and "avrupa" in channel_name.lower():
         print("🔐 ATV Avrupa için token alınıyor...")
         return get_atv_avrupa_token()
     
-    if "euro star" in channel_name_lower or "star avrupa" in channel_name_lower:
+    if "Euro Star" in channel_name or "Star Avrupa" in channel_name:
         print("🔐 EuroStar için token alınıyor...")
         return get_eurostar_token()
-
-    if "show türk" in channel_name_lower or "show turk" in channel_name_lower:
+    
+    if "Show Türk" in channel_name:
         print("🔐 Show Türk için token alınıyor...")
         return get_show_turk_token()
     
@@ -254,9 +251,24 @@ def create_extinf(channel: Dict, stream_url: str) -> str:
     group = channel.get("group", "Genel")
     tvg_id = channel.get("tvg_id", safe_filename(name).replace(".m3u", "").lower())
 
+    extra_headers = ""
+
+    # ATV Avrupa GitHub Actions/CDN 403 riskine karşı player header satırları
+    if "atv" in name.lower() and "avrupa" in name.lower():
+        ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        ref = "https://www.atvavrupa.tv/canli-yayin"
+        origin = "https://www.atvavrupa.tv"
+
+        extra_headers = (
+            f'#EXTVLCOPT:http-user-agent={ua}\n'
+            f'#EXTVLCOPT:http-referrer={ref}\n'
+            f'#KODIPROP:inputstream.adaptive.stream_headers=User-Agent={ua}&Referer={ref}&Origin={origin}\n'
+        )
+
     return (
         f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{name}" '
         f'tvg-logo="{logo}" group-title="{group}",{name}\n'
+        f'{extra_headers}'
         f'{stream_url}\n'
     )
 
