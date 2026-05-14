@@ -5,6 +5,7 @@ import re
 import subprocess
 import sys
 import requests
+import random  # EKLENDI
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -50,12 +51,15 @@ def is_direct_m3u8(url: str) -> bool:
 
 
 def get_atv_avrupa_token() -> Optional[str]:
+    """ATV Avrupa 576p token al - Her seferinde yeni token"""
     headers = {
         "X-isApp": "1",
         "X-Rand": str(int(datetime.now().timestamp() * 1000)),
         "Origin": "https://www.atvavrupa.tv",
         "Referer": "https://www.atvavrupa.tv/",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Cache-Control": "no-cache, no-store, must-revalidate",  # Cache önleme
+        "Pragma": "no-cache",
     }
     
     # Rastgele parametre ekleyerek cache bypass
@@ -64,6 +68,7 @@ def get_atv_avrupa_token() -> Optional[str]:
     tokenUrl = f"https://securevideotoken.tmgrup.com.tr/webtv/secure?759173&url=https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8&url2=https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8{random_param}"
     
     try:
+        print(f"   📡 Token isteği gönderiliyor...")
         response = requests.get(tokenUrl, headers=headers, timeout=10)
         data = response.json()
         token_url = data.get("Url")
@@ -71,60 +76,60 @@ def get_atv_avrupa_token() -> Optional[str]:
         if token_url:
             print(f"   ✅ Yeni token alındı (timestamp: {datetime.now().strftime('%H:%M:%S')})")
             return token_url
-        return None
+        else:
+            print(f"   ❌ Json'da Url bulunamadı: {data}")
+            return None
     except Exception as e:
         print(f"   ❌ Hata: {e}")
         return None
 
 
 def get_eurostar_token() -> Optional[str]:
-    """EuroStar / Star Avrupa token al - PowerShell kodunun birebir çevirisi"""
+    """EuroStar / Star Avrupa token al - Her seferinde yeni token"""
     headers = {
-        "Origin": "https://www.eurostartv.com.tr"
+        "Origin": "https://www.eurostartv.com.tr",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Cache-Control": "no-cache",  # Cache önleme
     }
     
     url = "https://dygvideo.dygdigital.com/live/hls/staravrupa?token=1ef7e00fe53c90636a8da88c4614fac65b9aecc277e0d0ea"
     
     try:
-        # PowerShell'deki -MaximumRedirection 0 ile aynı (redirect'leri takip etme)
+        print(f"   📡 Token isteği gönderiliyor...")
         response = requests.get(url, headers=headers, allow_redirects=False, timeout=10)
         
-        # PowerShell'deki $r.Headers.Location kontrolü
         if response.status_code == 302:
             location = response.headers.get("Location")
             if location:
-                print(f"   ✅ Token alındı (302 redirect): {location[:80]}...")
+                print(f"   ✅ Yeni token alındı (302 redirect)")
                 return location
         
-        # Hata durumunda catch blogundaki gibi
-        return None
+        # Token servisi çalışmıyorsa sabit URL dene
+        print(f"   ⚠️ Token servisi çalışmıyor, sabit URL deneniyor...")
+        fixed_url = "https://dogusdyg-eurostar.lg.mncdn.com/dogusdyg_eurostar/live.m3u8?st=fpnlq4xvy458xe4A_mo_sQ&e=1778878596"
+        return fixed_url
         
     except Exception as e:
-        # PowerShell'deki $_.Exception.Response.Headers.Location
-        # Exception içinden location'ı almaya çalış
-        if hasattr(e, 'response') and e.response is not None:
-            if e.response.status_code == 302:
-                location = e.response.headers.get("Location")
-                if location:
-                    print(f"   ✅ Token alındı (catch ile): {location[:80]}...")
-                    return location
-        
         print(f"   ❌ Hata: {e}")
-        return None
+        # Sabit URL dene
+        fixed_url = "https://dogusdyg-eurostar.lg.mncdn.com/dogusdyg_eurostar/live.m3u8?st=fpnlq4xvy458xe4A_mo_sQ&e=1778878596"
+        print(f"   ⚠️ Sabit URL kullanılıyor (süresi dolabilir)")
+        return fixed_url
 
 
 def get_show_turk_token() -> Optional[str]:
-    """Show Türk token al (sayfadan regex ile)"""
+    """Show Türk token al (sayfadan regex ile) - Her seferinde yeni token"""
     url = "https://www.showturk.com.tr/canli-yayin"
     pattern = r'playlist\.m3u8\?e=(\d+)&st=([^"\s&]+)'
     
     try:
+        print(f"   📡 Sayfa taranıyor...")
         response = requests.get(url, timeout=10)
         match = re.search(pattern, response.text)
         if match:
             e, st = match.groups()
             stream_url = f"https://ciner-live.ercdn.net/showturk/playlist.m3u8?e={e}&st={st}&tv=1"
-            print(f"   ✅ Token alındı: e={e}, st={st[:20]}...")
+            print(f"   ✅ Yeni token alındı (e={e})")
             return stream_url
         else:
             print(f"   ❌ Sayfada token bulunamadı")
