@@ -21,6 +21,9 @@ CHROME_UA = (
     "Chrome/148.0.0.0 Safari/537.36"
 )
 
+# ATV Avrupa YouTube kanal linki (coğrafi kısıtlamasız çalışan)
+ATV_YOUTUBE_URL = "https://www.youtube.com/channel/UCUVZ7T_kwkxDOGFcDlFI-hg/live?app=desktop"
+
 
 def load_config() -> Dict:
     with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -75,98 +78,83 @@ def is_show_turk_name(name: str) -> bool:
 
 
 def load_netscape_cookies(cookie_file: str = COOKIE_FILE) -> Dict[str, str]:
-    """Netscape format cookies.txt dosyasını requests cookies dict formatına çevirir."""
     cookies: Dict[str, str] = {}
     path = Path(cookie_file)
 
     if not path.exists():
-        print(f"   ℹ️ {cookie_file} bulunamadı, cookiesiz devam ediliyor")
         return cookies
 
     try:
         with path.open("r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
-
                 if not line or line.startswith("#"):
                     continue
-
                 parts = line.split("\t")
                 if len(parts) >= 7:
                     name = parts[5].strip()
                     value = parts[6].strip()
                     if name:
                         cookies[name] = value
-
-        if cookies:
-            print(f"   🍪 {len(cookies)} cookie yüklendi")
-        else:
-            print("   ⚠️ cookies.txt var ama okunabilir cookie bulunamadı")
-
-    except Exception as e:
-        print(f"   ⚠️ Cookie okuma hatası: {e}")
+    except Exception:
+        pass
 
     return cookies
 
 
-def get_atv_avrupa_token() -> Optional[str]:
-    """ATV Avrupa 576p - cookies.txt destekli otomatik token alıcı."""
-    headers = {
-        "X-isApp": "1",
-        "X-Rand": str(int(time.time() * 1000)),
-        "Origin": "https://www.atvavrupa.tv",
-        "Referer": "https://www.atvavrupa.tv/",
-        "User-Agent": CHROME_UA,
-        "Accept": "*/*",
-        "Accept-Language": "tr,en-US;q=0.9,en;q=0.8,de;q=0.7",
-    }
-
-    stream_url = "https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8"
-    encoded = urllib.parse.quote(stream_url)
-    token_url = (
-        "https://securevideotoken.tmgrup.com.tr/webtv/secure"
-        f"?{random.randint(1, 1000000)}&url={encoded}&url2={encoded}"
-    )
-
-    cookies = load_netscape_cookies()
-
+def get_youtube_channel_manifest(channel_url: str) -> Optional[str]:
+    """YouTube kanal canlı yayınından manifest URL'sini al (yt-dlp ile)"""
+    
+    cmd = [
+        "yt-dlp",
+        "-g",
+        "--cookies", COOKIE_FILE,
+        "--user-agent", CHROME_UA,
+        channel_url
+    ]
+    
     try:
-        response = requests.get(
-            token_url,
-            headers=headers,
-            cookies=cookies if cookies else None,
-            timeout=15,
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60
         )
-
-        print(f"   ATV token status: {response.status_code}")
-        response.raise_for_status()
-        data = response.json()
-
-        if data.get("Success") and data.get("Url"):
-            token_url_result = data.get("Url")
-            print("   ✅ ATV Avrupa token alındı")
-
-            match = re.search(r"[?&]e=(\d+)", token_url_result)
-            if match:
-                expire = datetime.fromtimestamp(int(match.group(1)))
-                print(f"   ⏰ ATV token süresi: {expire}")
-
-            return token_url_result
-
-        print(f"   ❌ ATV Avrupa token alınamadı: {data}")
+        
+        if result.returncode != 0:
+            print(f"   ❌ yt-dlp hatası: {result.stderr[:200]}")
+            return None
+        
+        lines = result.stdout.strip().split('\n')
+        
+        # m3u8 manifest'ini bul
+        for line in lines:
+            if '.m3u8' in line:
+                print(f"   ✅ YouTube manifest alındı")
+                return line
+        
+        if lines:
+            print(f"   ✅ YouTube URL alındı")
+            return lines[0]
+        
         return None
-
+        
+    except subprocess.TimeoutExpired:
+        print(f"   ❌ Zaman aşımı")
+        return None
     except Exception as e:
-        print(f"   ❌ ATV Avrupa hatası: {e}")
-        try:
-            print(f"   Cevap ilk 300 karakter: {response.text[:300]}")
-        except Exception:
-            pass
+        print(f"   ❌ yt-dlp hatası: {e}")
         return None
+
+
+def get_atv_avrupa_stream() -> Optional[str]:
+    """ATV Avrupa - YouTube manifest ile (coğrafi kısıtlama sorunu yok)"""
+    print("   🎬 ATV Avrupa YouTube manifest alınıyor...")
+    return get_youtube_channel_manifest(ATV_YOUTUBE_URL)
 
 
 def get_eurostar_token() -> Optional[str]:
-    """EuroStar 1080p - HTML'den token çek."""
+    """EuroStar 1080p - HTML'den token çek"""
     headers = {
         "User-Agent": CHROME_UA,
         "Accept": "text/html,application/xhtml+xml",
@@ -220,7 +208,7 @@ def get_eurostar_token() -> Optional[str]:
 
 
 def get_show_turk_token() -> Optional[str]:
-    """Show Türk - otomatik token alıcı."""
+    """Show Türk - otomatik token alıcı"""
     url = "https://www.showturk.com.tr/canli-yayin"
     pattern = r"playlist\.m3u8\?e=(\d+)&st=([^\"\s&]+)"
 
@@ -289,12 +277,13 @@ def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
 
 
 def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
-    """Kanal tipine göre stream URL'sini al."""
+    """Kanal tipine göre stream URL'sini al"""
     channel_name = channel.get("name", "")
 
+    # ATV Avrupa - YENİ: YouTube manifest ile
     if is_atv_avrupa_name(channel_name):
-        print("🔐 ATV Avrupa için token alınıyor...")
-        return get_atv_avrupa_token()
+        print("🔐 ATV Avrupa için YouTube manifest alınıyor...")
+        return get_atv_avrupa_stream()
 
     if is_eurostar_name(channel_name):
         print("🔐 EuroStar için token alınıyor...")
@@ -323,20 +312,9 @@ def create_extinf(channel: Dict, stream_url: str) -> str:
     group = channel.get("group", "Genel")
     tvg_id = channel.get("tvg_id", safe_filename(name).replace(".m3u", "").lower())
 
-    extra = ""
-
-    if is_atv_avrupa_name(name):
-        extra = (
-            f"#EXTVLCOPT:http-user-agent={CHROME_UA}\n"
-            "#EXTVLCOPT:http-referrer=https://www.atvavrupa.tv/\n"
-            "#EXTVLCOPT:http-origin=https://www.atvavrupa.tv\n"
-            f"#KODIPROP:inputstream.adaptive.stream_headers=User-Agent={CHROME_UA}&Referer=https://www.atvavrupa.tv/&Origin=https://www.atvavrupa.tv\n"
-        )
-
     return (
         f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{name}" '
         f'tvg-logo="{logo}" group-title="{group}",{name}\n'
-        f'{extra}'
         f'{stream_url}\n'
     )
 
@@ -361,7 +339,7 @@ def write_main_playlist(entries: List[str], output_folder: Path, output_playlist
 
 def main() -> int:
     print("=" * 60)
-    print("🎬 TV Kanalları M3U Güncelleyici (Token + Cookie Desteği)")
+    print("🎬 TV Kanalları M3U Güncelleyici (YouTube Manifest Desteği)")
     print("=" * 60)
     print(f"🕐 Başlangıç: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
