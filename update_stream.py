@@ -21,8 +21,8 @@ CHROME_UA = (
     "Chrome/148.0.0.0 Safari/537.36"
 )
 
-# ATV Avrupa YouTube kanal linki (coğrafi kısıtlamasız çalışan)
-ATV_YOUTUBE_URL = "https://www.youtube.com/channel/UCUVZ7T_kwkxDOGFcDlFI-hg/live?app=desktop"
+# ATV Avrupa YouTube kanal linki (çalışan)
+ATV_YOUTUBE_URL = "https://www.youtube.com/channel/UCUVZ7T_kwkxDOGFcDlFI-hg/live"
 
 
 def load_config() -> Dict:
@@ -105,51 +105,68 @@ def load_netscape_cookies(cookie_file: str = COOKIE_FILE) -> Dict[str, str]:
 def get_youtube_channel_manifest(channel_url: str) -> Optional[str]:
     """YouTube kanal canlı yayınından manifest URL'sini al (yt-dlp ile)"""
     
-    cmd = [
-        "yt-dlp",
-        "-g",
-        "--cookies", COOKIE_FILE,
-        "--user-agent", CHROME_UA,
-        channel_url
+    # Farklı yöntemler dene
+    methods = [
+        # Yöntem 1: android client
+        [
+            "yt-dlp", "-g", "--cookies", COOKIE_FILE,
+            "--user-agent", CHROME_UA,
+            "--extractor-args", "youtube:player_client=android",
+            channel_url
+        ],
+        # Yöntem 2: web client
+        [
+            "yt-dlp", "-g", "--cookies", COOKIE_FILE,
+            "--user-agent", CHROME_UA,
+            "--extractor-args", "youtube:player_client=web",
+            channel_url
+        ],
+        # Yöntem 3: no extractor args
+        [
+            "yt-dlp", "-g", "--cookies", COOKIE_FILE,
+            "--user-agent", CHROME_UA,
+            channel_url
+        ],
+        # Yöntem 4: format best
+        [
+            "yt-dlp", "-g", "--cookies", COOKIE_FILE,
+            "--format", "best",
+            channel_url
+        ]
     ]
     
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
-        
-        if result.returncode != 0:
-            print(f"   ❌ yt-dlp hatası: {result.stderr[:200]}")
-            return None
-        
-        lines = result.stdout.strip().split('\n')
-        
-        # m3u8 manifest'ini bul
-        for line in lines:
-            if '.m3u8' in line:
-                print(f"   ✅ YouTube manifest alındı")
-                return line
-        
-        if lines:
-            print(f"   ✅ YouTube URL alındı")
-            return lines[0]
-        
-        return None
-        
-    except subprocess.TimeoutExpired:
-        print(f"   ❌ Zaman aşımı")
-        return None
-    except Exception as e:
-        print(f"   ❌ yt-dlp hatası: {e}")
-        return None
+    for i, cmd in enumerate(methods):
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            
+            if result.returncode == 0:
+                lines = result.stdout.strip().split('\n')
+                for line in lines:
+                    if '.m3u8' in line or 'manifest' in line:
+                        print(f"   ✅ YouTube manifest alındı (yöntem {i+1})")
+                        return line
+                
+                if lines:
+                    print(f"   ✅ YouTube URL alındı (yöntem {i+1})")
+                    return lines[0]
+                    
+        except subprocess.TimeoutExpired:
+            continue
+        except Exception:
+            continue
+    
+    print(f"   ❌ yt-dlp manifest alınamadı")
+    return None
 
 
 def get_atv_avrupa_stream() -> Optional[str]:
-    """ATV Avrupa - YouTube manifest ile (coğrafi kısıtlama sorunu yok)"""
-    print("   🎬 ATV Avrupa YouTube manifest alınıyor...")
+    """ATV Avrupa - YouTube manifest ile"""
+    print("   🎬 YouTube manifest alınıyor...")
     return get_youtube_channel_manifest(ATV_YOUTUBE_URL)
 
 
@@ -241,10 +258,7 @@ def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
         "yt-dlp",
         "-g",
         "--cookies", COOKIE_FILE,
-        "--js-runtimes", "deno",
-        "--remote-components", "ejs:github",
-        "--extractor-args", "youtube:player_client=default",
-        "-f", quality,
+        "--user-agent", CHROME_UA,
         youtube_url,
     ]
 
@@ -280,7 +294,7 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
     """Kanal tipine göre stream URL'sini al"""
     channel_name = channel.get("name", "")
 
-    # ATV Avrupa - YENİ: YouTube manifest ile
+    # ATV Avrupa - YouTube manifest ile
     if is_atv_avrupa_name(channel_name):
         print("🔐 ATV Avrupa için YouTube manifest alınıyor...")
         return get_atv_avrupa_stream()
