@@ -2,7 +2,7 @@ name: TV Kanalları - Playlist Güncelleme
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -21,48 +21,59 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 📦 yt-dlp ve requests kur
+      - name: 📦 Deno kurulumu
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: latest
+
+      - name: 📦 yt-dlp kur
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --upgrade yt-dlp requests
+          python -m pip install --upgrade -r requirements.txt
 
-      - name: 🔧 yt-dlp güncelle ve test
+      - name: 🔧 Sürümleri kontrol et
         run: |
-          yt-dlp -U || true
           yt-dlp --version
+          deno --version
+          which deno
 
-      - name: 🎬 M3U listelerini oluştur
+      - name: 🍪 Cookies'i hazırla
+        run: |
+          if [ -n "${{ secrets.YOUTUBE_COOKIES }}" ]; then
+            echo "${{ secrets.YOUTUBE_COOKIES }}" | base64 -d > cookies.txt
+            echo "✅ Cookies yüklendi"
+          else
+            touch cookies.txt
+            echo "⚠️ YOUTUBE_COOKIES secret yok, boş cookies.txt ile devam ediliyor"
+          fi
+
+      - name: 🎬 Playlist klasörüne M3U listelerini oluştur
         run: |
           python update_stream.py
 
-      - name: ✅ Playlist kontrolü
+      - name: ✅ Playlist klasörünü kontrol et
         run: |
           if [ ! -s playlist/playerlist.m3u ]; then
             echo "❌ playlist/playerlist.m3u oluşmadı!"
-            echo "📁 Ana klasör içeriği:"
+            echo "📁 Ana klasör:"
             ls -la
-            echo "📁 Playlist klasörü içeriği:"
-            ls -la playlist 2>/dev/null || echo "playlist klasörü yok"
+            echo "📁 Playlist klasörü:"
+            ls -la playlist || true
             exit 1
           fi
 
           echo "✅ playlist/playerlist.m3u başarıyla oluşturuldu"
-          echo ""
-          echo "📄 İlk 20 satır:"
-          head -20 playlist/playerlist.m3u
-          echo ""
-          echo "📄 Oluşan M3U dosyaları:"
-          ls -la playlist/*.m3u 2>/dev/null || echo "M3U dosyası yok"
+          head -40 playlist/playerlist.m3u
+          echo "📄 playlist klasöründeki M3U dosyaları:"
+          ls -1 playlist/*.m3u
 
       - name: 📤 GitHub'a gönder
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add playlist/*.m3u config.json update_stream.py requirements.txt .github/workflows/update-stream.yml 2>/dev/null || true
-          if git diff --cached --quiet; then
-            echo "ℹ️ Değişiklik yok"
-          else
-            git commit -m "🔄 Playlist güncelleme: $(date '+%Y-%m-%d %H:%M:%S')"
-            git push
-            echo "✅ Pushlandı"
-          fi
+
+          git add playlist/*.m3u config.json update_stream.py requirements.txt .github/workflows/update-stream.yml
+
+          git diff --cached --quiet || git commit -m "🔄 Playlist M3U listelerini güncelle: $(date '+%Y-%m-%d %H:%M:%S')"
+
+          git push
