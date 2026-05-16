@@ -35,25 +35,8 @@ def load_config() -> Dict:
     config.setdefault("quality", "best[height<=1080][fps<=50]/best")
     config.setdefault("output_folder", "playlist")
     config.setdefault("output_playlist", "playlist.m3u8")
-    config.setdefault("resolution", "1280x720")
-    config.setdefault("bandwidth", "1280000")
     
     return config
-
-
-def safe_filename(name: str) -> str:
-    """Kanal adından güvenli dosya adı oluşturur"""
-    replacements = {
-        "ç": "c", "ğ": "g", "ı": "i", "ö": "o", "ş": "s", "ü": "u",
-        "Ç": "C", "Ğ": "G", "İ": "I", "Ö": "O", "Ş": "S", "Ü": "U",
-        " ": "_", "-": "_"
-    }
-    for old, new in replacements.items():
-        name = name.replace(old, new)
-    
-    # Sadece alfanumeric ve underscore kalacak
-    name = re.sub(r'[^a-zA-Z0-9_]', '', name)
-    return f"{name}.m3u8"
 
 
 def is_token_channel(url: str) -> bool:
@@ -228,24 +211,9 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
     return None
 
 
-def create_channel_m3u8(stream_url: str, resolution: str, bandwidth: str, output_path: Path) -> bool:
-    """Her kanal için ayrı M3U8 dosyası oluşturur"""
-    try:
-        content = f"""#EXTM3U
-#EXT-X-VERSION:3
-#EXT-X-STREAM-INF:BANDWIDTH={bandwidth},RESOLUTION={resolution}
-{stream_url}
-"""
-        output_path.write_text(content, encoding="utf-8")
-        return True
-    except Exception as e:
-        print(f"   ❌ Dosya yazma hatası: {e}")
-        return False
-
-
 def main() -> int:
     print("=" * 60)
-    print("🎬 TV Kanalları - Ayrı M3U8 Dosyaları Oluşturucu")
+    print("🎬 TV Kanalları M3U Playlist Oluşturucu")
     print("=" * 60)
     print(f"🕐 Başlangıç: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
@@ -259,18 +227,11 @@ def main() -> int:
     quality = config["quality"]
     output_folder = Path(config["output_folder"])
     output_playlist = config["output_playlist"]
-    default_resolution = config.get("resolution", "1280x720")
-    default_bandwidth = config.get("bandwidth", "1280000")
 
     output_folder.mkdir(parents=True, exist_ok=True)
 
-    # Eski M3U8 dosyalarını temizle
-    for old_file in output_folder.glob("*.m3u8"):
-        if old_file.name != output_playlist:
-            old_file.unlink()
-    
-    # Ana playlist için satırlar
-    master_playlist_lines = ["#EXTM3U", "#EXT-X-VERSION:3"]
+    # Ana playlist içeriği - Sade format
+    playlist_lines = ["#EXTM3U", "#EXT-X-VERSION:3"]
     
     success_count = 0
     failed_channels = []
@@ -286,21 +247,6 @@ def main() -> int:
             failed_channels.append(name)
             continue
 
-        # Kanal için resolution ve bandwidth ayarları
-        resolution = default_resolution
-        bandwidth = default_bandwidth
-        
-        if is_token_channel(channel_url):
-            if is_atv_avrupa_name(name):
-                resolution = "768x576"
-                bandwidth = "800000"
-            elif is_eurostar_name(name):
-                resolution = "1920x1080"
-                bandwidth = "3000000"
-            elif is_show_turk_name(name):
-                resolution = "1280x720"
-                bandwidth = "1500000"
-        
         # Stream URL'ini al
         stream_url = get_stream_url(channel, quality)
         
@@ -309,51 +255,42 @@ def main() -> int:
             failed_channels.append(name)
             continue
         
-        # Kanal için ayrı M3U8 dosyası oluştur
-        channel_filename = safe_filename(name)
-        channel_path = output_folder / channel_filename
+        # Playlist'e ekle - #EXTINF:-1 formatında
+        playlist_lines.append(f"#EXTINF:-1,{name}")
+        playlist_lines.append(stream_url)
         
-        if create_channel_m3u8(stream_url, resolution, bandwidth, channel_path):
-            print(f"   ✅ {channel_filename} oluşturuldu ({resolution})")
-            
-            # Ana playlist'e ekle
-            master_playlist_lines.append(f'#EXT-X-STREAM-INF:BANDWIDTH={bandwidth},RESOLUTION={resolution}')
-            master_playlist_lines.append(channel_filename)
-            
-            success_count += 1
-        else:
-            print(f"   ❌ Dosya oluşturulamadı")
-            failed_channels.append(name)
+        print(f"   ✅ Eklendi")
+        success_count += 1
         
         time.sleep(0.5)  # Rate limiting
 
-    # Ana playlist dosyasını oluştur
-    if master_playlist_lines:
-        master_playlist_path = output_folder / output_playlist
-        master_playlist_path.write_text("\n".join(master_playlist_lines), encoding="utf-8")
+    # Playlist dosyasını oluştur
+    if playlist_lines:
+        output_path = output_folder / output_playlist
+        output_path.write_text("\n".join(playlist_lines), encoding="utf-8")
         
         print("\n" + "=" * 60)
         print(f"✅ İşlem tamamlandı!")
         print(f"📊 Başarılı: {success_count}/{len(config['channels'])} kanal")
-        print(f"📁 Ana playlist: {master_playlist_path}")
-        print(f"📄 Kanal dosyaları: {output_folder}/")
-        
-        # Kanal dosyalarını listele
-        for file in sorted(output_folder.glob("*.m3u8")):
-            if file.name != output_playlist:
-                print(f"   - {file.name}")
+        print(f"📁 Çıktı: {output_path}")
+        print(f"📦 Dosya boyutu: {output_path.stat().st_size} byte")
         
         # Ana playlist içeriğini göster
-        print("\n📄 Ana playlist içeriği:")
-        for line in master_playlist_lines[:10]:
-            print(f"   {line}")
-        if len(master_playlist_lines) > 10:
-            print(f"   ... ve {len(master_playlist_lines)-10} satır daha")
+        print("\n📄 Oluşan playlist:")
+        for i, line in enumerate(playlist_lines[:20]):
+            if len(line) > 100:
+                print(f"   {line[:100]}...")
+            else:
+                print(f"   {line}")
+        if len(playlist_lines) > 20:
+            print(f"   ... ve {len(playlist_lines)-20} satır daha")
         
         if failed_channels:
             print(f"\n⚠️ Başarısız kanallar ({len(failed_channels)}):")
             for ch in failed_channels[:10]:
                 print(f"   - {ch}")
+            if len(failed_channels) > 10:
+                print(f"   ... ve {len(failed_channels)-10} kanal daha")
     
     print("=" * 60)
     return 0
