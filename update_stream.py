@@ -10,7 +10,7 @@ import time
 import urllib.parse
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 CONFIG_FILE = "config.json"
 COOKIE_FILE = "cookies.txt"
@@ -259,75 +259,56 @@ def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
         return None
 
     except subprocess.CalledProcessError as e:
-        print("❌ yt-dlp hatası:")
-        print(e.stderr)
+        print(f"   ❌ yt-dlp hatası: {e.stderr[:200]}")
         return None
     except Exception as e:
-        print(f"❌ Hata: {e}")
+        print(f"   ❌ Hata: {e}")
         return None
 
 
-def get_stream_url(channel: Dict, quality: str, config: Dict) -> Optional[str]:
+def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
     """Kanal tipine göre stream URL'sini alır"""
     channel_name = channel.get("name", "")
     channel_url = channel.get("url", "")
 
+    print(f"   📍 URL: {channel_url[:80]}...")
+
     # Token gerektiren kanallar
     if is_token_channel(channel_url):
         if is_atv_avrupa_name(channel_name):
-            print("🔐 ATV Avrupa token alınıyor...")
+            print("   🔐 ATV Avrupa token alınıyor...")
             return get_atv_avrupa_stream()
         
         elif is_eurostar_name(channel_name):
-            print("🔐 EuroStar token alınıyor...")
+            print("   🔐 EuroStar token alınıyor...")
             return get_eurostar_stream()
         
         elif is_show_turk_name(channel_name):
-            print("🔐 Show Türk token alınıyor...")
+            print("   🔐 Show Türk token alınıyor...")
             return get_show_turk_stream()
         
         else:
-            print(f"⚠️ {channel_name} için token handler bulunamadı")
+            print(f"   ⚠️ Token handler bulunamadı")
             return None
     
     # Direkt M3U8 linki
-    elif channel_url.lower().endswith(".m3u8") or ".m3u8?" in channel_url:
-        print("🔗 Direkt M3U8 linki kullanılıyor")
+    elif ".m3u8" in channel_url.lower():
+        print("   🔗 Direkt M3U8 linki")
         return channel_url
     
     # YouTube linki
     elif "youtube.com" in channel_url or "youtu.be" in channel_url:
-        print("🎬 YouTube stream alınıyor...")
+        print("   🎬 YouTube stream alınıyor...")
         return get_youtube_stream_url(channel_url, quality)
     
     else:
-        print(f"⚠️ Bilinmeyen URL formatı: {channel_url}")
+        print(f"   ⚠️ Bilinmeyen format")
         return None
-
-
-def create_hls_master_entry(channel: Dict, stream_url: str, resolution: str, bandwidth: str) -> str:
-    """
-    HLS master playlist formatında EXT-X-STREAM-INF oluşturur
-    Örnek: #EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720
-    """
-    return f'#EXT-X-STREAM-INF:BANDWIDTH={bandwidth},RESOLUTION={resolution}\n{stream_url}'
-
-
-def write_master_playlist(entries: List[str], output_folder: Path, output_playlist: str) -> Path:
-    """Ana master playlist dosyasını oluşturur"""
-    output_folder.mkdir(parents=True, exist_ok=True)
-    path = output_folder / output_playlist
-    
-    content = "#EXTM3U\n#EXT-X-VERSION:3\n"
-    content += "\n".join(entries)
-    
-    path.write_text(content, encoding="utf-8")
-    return path
 
 
 def main() -> int:
     print("=" * 60)
-    print("🎬 TV Kanalları HLS Master Playlist Güncelleyici")
+    print("🎬 TV Kanalları HLS Playlist Oluşturucu")
     print("=" * 60)
     print(f"🕐 Başlangıç: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
@@ -341,82 +322,75 @@ def main() -> int:
     quality = config["quality"]
     output_folder = Path(config["output_folder"])
     output_playlist = config["output_playlist"]
-    default_resolution = config.get("resolution", "1280x720")
-    default_bandwidth = config.get("bandwidth", "1280000")
 
     output_folder.mkdir(parents=True, exist_ok=True)
 
-    playlist_entries: List[str] = []
-    failed_channels: List[str] = []
+    # SADECE HLS MASTER PLAYLIST formatında çıktı - hiçbir logo/metadata yok
+    playlist_lines = ["#EXTM3U", "#EXT-X-VERSION:3"]
+    
+    success_count = 0
+    failed_channels = []
 
     for index, channel in enumerate(config["channels"], start=1):
         name = channel.get("name", f"Kanal {index}")
         channel_url = channel.get("url", "")
 
         if not channel_url:
-            print(f"\n⚠️ [{index}/{len(config['channels'])}] {name}: url yok, atlandı")
+            print(f"\n⚠️ [{index}/{len(config['channels'])}] {name}: URL yok")
             failed_channels.append(name)
             continue
 
-        print(f"\n🔄 [{index}/{len(config['channels'])}] {name} taranıyor...")
+        print(f"\n🔄 [{index}/{len(config['channels'])}] {name}")
         
-        # Kanal için resolution ve bandwidth ayarları
-        resolution = channel.get("resolution", default_resolution)
-        bandwidth = channel.get("bandwidth", default_bandwidth)
-        
-        # Token kanallar için özel resolution/bandwidth
-        if is_token_channel(channel_url):
-            if is_atv_avrupa_name(name):
-                resolution = "768x576"
-                bandwidth = "800000"
-            elif is_eurostar_name(name):
-                resolution = "1920x1080"
-                bandwidth = "3000000"
-            elif is_show_turk_name(name):
-                resolution = "1280x720"
-                bandwidth = "1500000"
-        
-        stream_url = get_stream_url(channel, quality, config)
+        stream_url = get_stream_url(channel, quality)
 
         if not stream_url:
-            print(f"❌ {name}: Stream URL alınamadı")
+            print(f"   ❌ Stream alınamadı")
             failed_channels.append(name)
             continue
 
-        # Master playlist entry oluştur
-        entry = create_hls_master_entry(channel, stream_url, resolution, bandwidth)
-        playlist_entries.append(entry)
+        # Sade ve temiz HLS master playlist entry
+        # Örnek: #EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720
+        resolution = config.get("resolution", "1280x720")
+        bandwidth = config.get("bandwidth", "1280000")
         
-        print(f"✅ {name}: {resolution} @ {int(bandwidth)//1000}kbps")
+        playlist_lines.append(f'#EXT-X-STREAM-INF:BANDWIDTH={bandwidth},RESOLUTION={resolution}')
+        playlist_lines.append(stream_url)
         
-        # Rate limiting
-        time.sleep(0.5)
+        print(f"   ✅ Başarılı - {resolution}")
+        success_count += 1
+        
+        time.sleep(0.5)  # Rate limiting
 
-    if playlist_entries:
-        master_playlist = write_master_playlist(playlist_entries, output_folder, output_playlist)
-        print(f"\n✅ Master playlist oluşturuldu: {master_playlist}")
-        print(f"✅ Başarılı kanal sayısı: {len(playlist_entries)}/{len(config['channels'])}")
-        
-        # İçeriği göster
-        print("\n📄 Oluşan playlist içeriği:")
-        content = master_playlist.read_text(encoding="utf-8")
-        lines = content.split('\n')
-        for i, line in enumerate(lines[:20]):  # İlk 20 satırı göster
-            print(f"   {line}")
-        if len(lines) > 20:
-            print(f"   ... ve {len(lines)-20} satır daha")
-    else:
-        print("\n❌ Hiçbir kanal için link alınamadı")
-        return 1
-
+    # Playlist dosyasını yaz
+    output_path = output_folder / output_playlist
+    output_path.write_text("\n".join(playlist_lines), encoding="utf-8")
+    
+    print("\n" + "=" * 60)
+    print(f"✅ İşlem tamamlandı!")
+    print(f"📊 Başarılı: {success_count}/{len(config['channels'])} kanal")
+    print(f"📁 Çıktı: {output_path}")
+    print(f"📦 Dosya boyutu: {output_path.stat().st_size} byte")
+    
     if failed_channels:
-        print(f"\n⚠️ Alınamayan kanallar ({len(failed_channels)}):")
-        for channel_name in failed_channels[:10]:
-            print(f"   - {channel_name}")
+        print(f"\n⚠️ Başarısız kanallar ({len(failed_channels)}):")
+        for ch in failed_channels[:10]:
+            print(f"   - {ch}")
         if len(failed_channels) > 10:
             print(f"   ... ve {len(failed_channels)-10} kanal daha")
-
-    print(f"\n✅ İşlem tamamlandı: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    # Çıktının ilk 20 satırını göster
+    print("\n📄 Oluşan playlist (ilk 20 satır):")
+    lines = playlist_lines[:20]
+    for line in lines:
+        if len(line) > 100:
+            print(f"   {line[:100]}...")
+        else:
+            print(f"   {line}")
+    
+    print("\n✅ Tüm logolar ve metadata TEMİZLENDİ!")
+    print("=" * 60)
+    
     return 0
 
 
