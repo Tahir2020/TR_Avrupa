@@ -1,3 +1,3 @@
 #EXTM3U
-#EXTINF:-1 tvg-id="kanal7avrupa.tr" tvg-name="Kanal 7 Avrupa" tvg-logo="https://i.postimg.cc/PrSc4SVs/In-Shot-20250209-224757709.png" group-title="Ulusal Kanallar",Kanal 7 Avrupa
+#EXTINF:-1 tvg-id="kanal7avrupa.tr" tvg-name="Kanal 7 Avrupa" tvg-logo="https://cdn.kanal7.com/kanal7/wp-content/themes/kanal7avrupa/images/kanal7avrupa_logo.png" group-title="Ulusal Kanallar",Kanal 7 Avrupa
 https://livetv.radyotvonline.net/kanal7live/kanal7avr/playlist.m3u8
