@@ -8,6 +8,7 @@ import requests
 import random
 import time
 import urllib.parse
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -317,14 +318,6 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
     return get_youtube_stream_url(url, quality)
 
 
-def create_hls_playlist_entry(stream_url: str, resolution: str = "1280x720", bandwidth: str = "1280000") -> str:
-    """
-    HLS formatında M3U8 playlist entry oluşturur
-    #EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720
-    """
-    return f'#EXT-X-STREAM-INF:BANDWIDTH={bandwidth},RESOLUTION={resolution}\n{stream_url}'
-
-
 def create_extinf(channel: Dict, stream_url: str) -> str:
     """
     Basit EXTINF oluşturur (logasız, grupsuz)
@@ -335,20 +328,6 @@ def create_extinf(channel: Dict, stream_url: str) -> str:
         f'#EXTINF:-1,{name}\n'
         f'{stream_url}\n'
     )
-
-
-def create_hls_master_playlist(stream_urls: List[tuple]) -> str:
-    """
-    Çoklu kalite seçeneği için HLS master playlist oluşturur
-    stream_urls: [(url, bandwidth, resolution), ...]
-    """
-    lines = ['#EXTM3U', '#EXT-X-VERSION:3']
-    
-    for url, bandwidth, resolution in stream_urls:
-        lines.append(f'#EXT-X-STREAM-INF:BANDWIDTH={bandwidth},RESOLUTION={resolution}')
-        lines.append(url)
-    
-    return '\n'.join(lines)
 
 
 def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Path) -> Path:
@@ -363,16 +342,32 @@ def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Pat
 
 
 def write_main_playlist(entries: List[str], output_folder: Path, output_playlist: str) -> Path:
-    """Ana playlist.m3u8 dosyasını oluşturur (HLS master playlist formatında)"""
+    """Ana playlist.m3u8 dosyasını oluşturur"""
     output_folder.mkdir(parents=True, exist_ok=True)
     path = output_folder / output_playlist
     
-    # HLS master playlist formatı
     content = "#EXTM3U\n#EXT-X-VERSION:3\n"
     content += "\n".join(entries)
     
     path.write_text(content, encoding="utf-8")
     return path
+
+
+def create_compatibility_links(output_folder: Path):
+    """Eski workflow için uyumluluk linkleri oluştur"""
+    main_m3u8 = output_folder / "playlist.m3u8"
+    playerlist_m3u = output_folder / "playerlist.m3u"
+    
+    if main_m3u8.exists():
+        # playerlist.m3u'yu oluştur (eski format için)
+        shutil.copy2(main_m3u8, playerlist_m3u)
+        print(f"✅ Uyumluluk dosyası oluşturuldu: {playerlist_m3u}")
+        
+        # Ayrıca playerlist.m3u8 de oluştur
+        playerlist_m3u8 = output_folder / "playerlist.m3u8"
+        if not playerlist_m3u8.exists():
+            shutil.copy2(main_m3u8, playerlist_m3u8)
+            print(f"✅ Uyumluluk dosyası oluşturuldu: {playerlist_m3u8}")
 
 
 def main() -> int:
@@ -394,11 +389,13 @@ def main() -> int:
 
     output_folder.mkdir(parents=True, exist_ok=True)
 
-    # Eski dosyaları temizle
+    # Eski dosyaları temizle (playerlist.m3u hariç, sonra tekrar oluşturulacak)
     for old_file in output_folder.glob("*.m3u8"):
-        old_file.unlink()
+        if old_file.name != "playerlist.m3u8":
+            old_file.unlink()
     for old_file in output_folder.glob("*.m3u"):
-        old_file.unlink()
+        if old_file.name != "playerlist.m3u":
+            old_file.unlink()
 
     playlist_entries: List[str] = []
     failed_channels: List[str] = []
@@ -422,15 +419,21 @@ def main() -> int:
         # Tek kanal dosyası oluştur
         single_file = write_single_channel_file(channel, stream_url, output_folder)
         
-        # Ana playlist için entry (logasız, grupsuz)
+        # Ana playlist için entry
         playlist_entries.append(create_extinf(channel, stream_url))
         
         print(f"✅ {name}: {single_file} oluşturuldu")
+        
+        # Rate limiting
+        time.sleep(0.5)
 
     if playlist_entries:
         main_playlist = write_main_playlist(playlist_entries, output_folder, output_playlist)
         print(f"\n✅ Toplu liste oluşturuldu: {main_playlist}")
         print(f"✅ Başarılı kanal sayısı: {len(playlist_entries)}/{len(config['channels'])}")
+        
+        # Uyumluluk linkleri oluştur
+        create_compatibility_links(output_folder)
     else:
         print("\n❌ Hiçbir kanal için link alınamadı")
         return 1
@@ -443,6 +446,9 @@ def main() -> int:
     print(f"\n📄 Oluşan M3U8 dosyaları ({output_folder}/):")
     for file in sorted(output_folder.glob("*.m3u8")):
         print(f"   - {file.name}")
+    for file in sorted(output_folder.glob("*.m3u")):
+        if file.name not in [f.name for f in output_folder.glob("*.m3u8")]:
+            print(f"   - {file.name}")
 
     print(f"\n✅ İşlem tamamlandı: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     return 0
