@@ -24,6 +24,7 @@ CHROME_UA = (
 
 
 def load_config() -> Dict:
+    """config.json dosyasını yükler"""
     with open(CONFIG_FILE, "r", encoding="utf-8") as f:
         config = json.load(f)
 
@@ -36,10 +37,14 @@ def load_config() -> Dict:
     config.setdefault("quality", "best[height<=1080][fps<=50]/best")
     config.setdefault("output_folder", "playlist")
     config.setdefault("output_playlist", "playlist.m3u8")
+    config.setdefault("resolution", "1280x720")
+    config.setdefault("bandwidth", "1280000")
+    
     return config
 
 
 def safe_filename(name: str) -> str:
+    """Güvenli dosya adı oluşturur"""
     replacements = {
         "ç": "c", "Ç": "C",
         "ğ": "g", "Ğ": "G",
@@ -56,27 +61,31 @@ def safe_filename(name: str) -> str:
 
 
 def is_direct_m3u8(url: str) -> bool:
+    """URL'nin direkt m3u8 olup olmadığını kontrol eder"""
     clean = url.lower().split("?", 1)[0]
     return clean.endswith(".m3u8")
 
 
 def is_atv_avrupa_name(name: str) -> bool:
+    """ATV Avrupa kontrolü"""
     lower = name.lower()
     return "atv" in lower and "avrupa" in lower
 
 
 def is_eurostar_name(name: str) -> bool:
+    """EuroStar kontrolü"""
     lower = name.lower()
     return "euro star" in lower or "eurostar" in lower or "star avrupa" in lower
 
 
 def is_show_turk_name(name: str) -> bool:
+    """Show Türk kontrolü"""
     lower = name.lower()
     return "show" in lower and ("türk" in lower or "turk" in lower)
 
 
 def load_netscape_cookies(cookie_file: str = COOKIE_FILE) -> Dict[str, str]:
-    """Netscape format cookies.txt dosyasını requests cookies dict formatına çevirir."""
+    """Netscape format cookies.txt dosyasını requests cookies dict formatına çevirir"""
     cookies: Dict[str, str] = {}
     path = Path(cookie_file)
 
@@ -111,7 +120,7 @@ def load_netscape_cookies(cookie_file: str = COOKIE_FILE) -> Dict[str, str]:
 
 
 def get_atv_avrupa_token() -> Optional[str]:
-    """ATV Avrupa 576p - cookies.txt destekli otomatik token alıcı."""
+    """ATV Avrupa 576p - cookies.txt destekli otomatik token alıcı"""
     headers = {
         "X-isApp": "1",
         "X-Rand": str(int(time.time() * 1000)),
@@ -159,15 +168,11 @@ def get_atv_avrupa_token() -> Optional[str]:
 
     except Exception as e:
         print(f"   ❌ ATV Avrupa hatası: {e}")
-        try:
-            print(f"   Cevap ilk 300 karakter: {response.text[:300]}")
-        except Exception:
-            pass
         return None
 
 
 def get_eurostar_token() -> Optional[str]:
-    """EuroStar 1080p - HTML'den token çek."""
+    """EuroStar 1080p - HTML'den token çek"""
     headers = {
         "User-Agent": CHROME_UA,
         "Accept": "text/html,application/xhtml+xml",
@@ -221,7 +226,7 @@ def get_eurostar_token() -> Optional[str]:
 
 
 def get_show_turk_token() -> Optional[str]:
-    """Show Türk - otomatik token alıcı."""
+    """Show Türk - otomatik token alıcı"""
     url = "https://www.showturk.com.tr/canli-yayin"
     pattern = r"playlist\.m3u8\?e=(\d+)&st=([^\"\s&]+)"
 
@@ -250,6 +255,7 @@ def get_show_turk_token() -> Optional[str]:
 
 
 def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
+    """YouTube stream URL'sini yt-dlp ile alır"""
     cmd = [
         "yt-dlp",
         "-g",
@@ -290,7 +296,7 @@ def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
 
 
 def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
-    """Kanal tipine göre stream URL'sini al."""
+    """Kanal tipine göre stream URL'sini alır"""
     channel_name = channel.get("name", "")
 
     if is_atv_avrupa_name(channel_name):
@@ -318,31 +324,47 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
     return get_youtube_stream_url(url, quality)
 
 
-def create_extinf(channel: Dict, stream_url: str) -> str:
+def create_hls_playlist(stream_url: str, resolution: str = "1280x720", bandwidth: str = "1280000") -> str:
     """
-    Basit EXTINF oluşturur (logasız, grupsuz)
+    HLS formatında M3U8 playlist oluşturur
+    Format:
+    #EXTM3U
+    #EXT-X-VERSION:3
+    #EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720
+    stream_url
     """
-    name = channel["name"]
-    
     return (
-        f'#EXTINF:-1,{name}\n'
-        f'{stream_url}\n'
+        f"#EXTM3U\n"
+        f"#EXT-X-VERSION:3\n"
+        f"#EXT-X-STREAM-INF:BANDWIDTH={bandwidth},RESOLUTION={resolution}\n"
+        f"{stream_url}"
     )
 
 
-def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Path) -> Path:
-    """Tek bir kanal için M3U8 dosyası oluşturur (HLS formatında)"""
+def create_main_playlist_entry(channel: Dict, stream_url: str) -> str:
+    """
+    Ana playlist için EXTINF girişi oluşturur
+    Format: #EXTINF:-1,Kanal Adı\nstream_url
+    """
+    name = channel["name"]
+    return f"#EXTINF:-1,{name}\n{stream_url}"
+
+
+def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Path, resolution: str, bandwidth: str) -> Path:
+    """Tek bir kanal için HLS formatında M3U8 dosyası oluşturur"""
     output_folder.mkdir(parents=True, exist_ok=True)
     filename = channel.get("m3u_file") or safe_filename(channel["name"])
     path = output_folder / filename
 
-    content = "#EXTM3U\n#EXT-X-VERSION:3\n" + create_extinf(channel, stream_url)
+    # HLS formatında içerik oluştur
+    content = create_hls_playlist(stream_url, resolution, bandwidth)
     path.write_text(content, encoding="utf-8")
+    
     return path
 
 
 def write_main_playlist(entries: List[str], output_folder: Path, output_playlist: str) -> Path:
-    """Ana playlist.m3u8 dosyasını oluşturur"""
+    """Ana playlist dosyasını oluşturur"""
     output_folder.mkdir(parents=True, exist_ok=True)
     path = output_folder / output_playlist
     
@@ -353,17 +375,17 @@ def write_main_playlist(entries: List[str], output_folder: Path, output_playlist
     return path
 
 
-def create_compatibility_links(output_folder: Path):
-    """Eski workflow için uyumluluk linkleri oluştur"""
-    main_m3u8 = output_folder / "playlist.m3u8"
-    playerlist_m3u = output_folder / "playerlist.m3u"
+def create_compatibility_links(output_folder: Path, main_playlist_name: str):
+    """Eski workflow için uyumluluk linkleri oluşturur"""
+    main_m3u8 = output_folder / main_playlist_name
     
     if main_m3u8.exists():
-        # playerlist.m3u'yu oluştur (eski format için)
+        # playerlist.m3u oluştur
+        playerlist_m3u = output_folder / "playerlist.m3u"
         shutil.copy2(main_m3u8, playerlist_m3u)
         print(f"✅ Uyumluluk dosyası oluşturuldu: {playerlist_m3u}")
         
-        # Ayrıca playerlist.m3u8 de oluştur
+        # playerlist.m3u8 oluştur
         playerlist_m3u8 = output_folder / "playerlist.m3u8"
         if not playerlist_m3u8.exists():
             shutil.copy2(main_m3u8, playerlist_m3u8)
@@ -386,19 +408,23 @@ def main() -> int:
     quality = config["quality"]
     output_folder = Path(config["output_folder"])
     output_playlist = config["output_playlist"]
+    resolution = config.get("resolution", "1280x720")
+    bandwidth = config.get("bandwidth", "1280000")
 
+    # Çıktı klasörünü oluştur
     output_folder.mkdir(parents=True, exist_ok=True)
 
-    # Eski dosyaları temizle (playerlist.m3u hariç, sonra tekrar oluşturulacak)
+    # Eski dosyaları temizle (uyumluluk dosyaları hariç)
     for old_file in output_folder.glob("*.m3u8"):
-        if old_file.name != "playerlist.m3u8":
+        if old_file.name not in ["playerlist.m3u8"]:
             old_file.unlink()
     for old_file in output_folder.glob("*.m3u"):
-        if old_file.name != "playerlist.m3u":
+        if old_file.name not in ["playerlist.m3u"]:
             old_file.unlink()
 
     playlist_entries: List[str] = []
     failed_channels: List[str] = []
+    successful_channels: List[str] = []
 
     for index, channel in enumerate(config["channels"], start=1):
         name = channel.get("name", f"Kanal {index}")
@@ -409,6 +435,8 @@ def main() -> int:
             continue
 
         print(f"\n🔄 [{index}/{len(config['channels'])}] {name} taranıyor...")
+        print("-" * 40)
+        
         stream_url = get_stream_url(channel, quality)
 
         if not stream_url:
@@ -416,41 +444,67 @@ def main() -> int:
             failed_channels.append(name)
             continue
 
-        # Tek kanal dosyası oluştur
-        single_file = write_single_channel_file(channel, stream_url, output_folder)
+        # Tek kanal dosyası oluştur (HLS formatında)
+        single_file = write_single_channel_file(
+            channel, stream_url, output_folder, resolution, bandwidth
+        )
         
         # Ana playlist için entry
-        playlist_entries.append(create_extinf(channel, stream_url))
+        playlist_entries.append(create_main_playlist_entry(channel, stream_url))
         
-        print(f"✅ {name}: {single_file} oluşturuldu")
+        successful_channels.append(name)
+        print(f"✅ {name}: {single_file.name} oluşturuldu")
+        print(f"   📹 Stream URL: {stream_url[:80]}..." if len(stream_url) > 80 else f"   📹 Stream URL: {stream_url}")
         
         # Rate limiting
         time.sleep(0.5)
 
+    # Ana playlist'i oluştur
     if playlist_entries:
         main_playlist = write_main_playlist(playlist_entries, output_folder, output_playlist)
-        print(f"\n✅ Toplu liste oluşturuldu: {main_playlist}")
-        print(f"✅ Başarılı kanal sayısı: {len(playlist_entries)}/{len(config['channels'])}")
+        print(f"\n{'=' * 60}")
+        print(f"✅ Toplu liste oluşturuldu: {main_playlist}")
+        print(f"✅ Başarılı kanal sayısı: {len(successful_channels)}/{len(config['channels'])}")
         
         # Uyumluluk linkleri oluştur
-        create_compatibility_links(output_folder)
+        create_compatibility_links(output_folder, output_playlist)
     else:
         print("\n❌ Hiçbir kanal için link alınamadı")
         return 1
 
+    # Başarısız kanalları göster
     if failed_channels:
-        print("\n⚠️ Alınamayan kanallar:")
+        print(f"\n⚠️ Alınamayan kanallar ({len(failed_channels)}):")
         for channel_name in failed_channels:
             print(f"   - {channel_name}")
 
-    print(f"\n📄 Oluşan M3U8 dosyaları ({output_folder}/):")
-    for file in sorted(output_folder.glob("*.m3u8")):
-        print(f"   - {file.name}")
-    for file in sorted(output_folder.glob("*.m3u")):
-        if file.name not in [f.name for f in output_folder.glob("*.m3u8")]:
-            print(f"   - {file.name}")
+    # Oluşturulan dosyaları listele
+    print(f"\n📁 '{output_folder}/' klasörü içeriği:")
+    print("-" * 40)
+    
+    m3u8_files = sorted(output_folder.glob("*.m3u8"))
+    m3u_files = sorted(output_folder.glob("*.m3u"))
+    
+    for file in m3u8_files:
+        size = file.stat().st_size
+        print(f"   📺 {file.name} ({size} bytes)")
+    
+    for file in m3u_files:
+        if file.name not in [f.name for f in m3u8_files]:
+            size = file.stat().st_size
+            print(f"   📄 {file.name} ({size} bytes)")
 
-    print(f"\n✅ İşlem tamamlandı: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    # Örnek dosya içeriğini göster
+    if m3u8_files:
+        print(f"\n📄 Örnek dosya içeriği ({m3u8_files[0].name}):")
+        print("-" * 40)
+        sample_content = m3u8_files[0].read_text(encoding="utf-8")
+        print(sample_content)
+
+    print(f"\n{'=' * 60}")
+    print(f"✅ İşlem tamamlandı: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 60)
+    
     return 0
 
 
