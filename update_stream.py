@@ -34,7 +34,7 @@ def load_config() -> Dict:
 
     config.setdefault("quality", "best[height<=1080][fps<=50]/best")
     config.setdefault("output_folder", "playlist")
-    config.setdefault("output_playlist", "playerlist.m3u")
+    config.setdefault("output_playlist", "playlist.m3u8")
     return config
 
 
@@ -51,7 +51,7 @@ def safe_filename(name: str) -> str:
         name = name.replace(old, new)
 
     name = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_")
-    return f"{name or 'channel'}.m3u"
+    return f"{name or 'channel'}.m3u8"
 
 
 def is_direct_m3u8(url: str) -> bool:
@@ -317,51 +317,67 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
     return get_youtube_stream_url(url, quality)
 
 
+def create_hls_playlist_entry(stream_url: str, resolution: str = "1280x720", bandwidth: str = "1280000") -> str:
+    """
+    HLS formatında M3U8 playlist entry oluşturur
+    #EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720
+    """
+    return f'#EXT-X-STREAM-INF:BANDWIDTH={bandwidth},RESOLUTION={resolution}\n{stream_url}'
+
+
 def create_extinf(channel: Dict, stream_url: str) -> str:
+    """
+    Basit EXTINF oluşturur (logasız, grupsuz)
+    """
     name = channel["name"]
-    logo = channel.get("logo", "")
-    group = channel.get("group", "Genel")
-    tvg_id = channel.get("tvg_id", safe_filename(name).replace(".m3u", "").lower())
-
-    extra = ""
-
-    if is_atv_avrupa_name(name):
-        extra = (
-            f"#EXTVLCOPT:http-user-agent={CHROME_UA}\n"
-            "#EXTVLCOPT:http-referrer=https://www.atvavrupa.tv/\n"
-            "#EXTVLCOPT:http-origin=https://www.atvavrupa.tv\n"
-            f"#KODIPROP:inputstream.adaptive.stream_headers=User-Agent={CHROME_UA}&Referer=https://www.atvavrupa.tv/&Origin=https://www.atvavrupa.tv\n"
-        )
-
+    
     return (
-        f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{name}" '
-        f'tvg-logo="{logo}" group-title="{group}",{name}\n'
-        f'{extra}'
+        f'#EXTINF:-1,{name}\n'
         f'{stream_url}\n'
     )
 
 
+def create_hls_master_playlist(stream_urls: List[tuple]) -> str:
+    """
+    Çoklu kalite seçeneği için HLS master playlist oluşturur
+    stream_urls: [(url, bandwidth, resolution), ...]
+    """
+    lines = ['#EXTM3U', '#EXT-X-VERSION:3']
+    
+    for url, bandwidth, resolution in stream_urls:
+        lines.append(f'#EXT-X-STREAM-INF:BANDWIDTH={bandwidth},RESOLUTION={resolution}')
+        lines.append(url)
+    
+    return '\n'.join(lines)
+
+
 def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Path) -> Path:
+    """Tek bir kanal için M3U8 dosyası oluşturur (HLS formatında)"""
     output_folder.mkdir(parents=True, exist_ok=True)
     filename = channel.get("m3u_file") or safe_filename(channel["name"])
     path = output_folder / filename
 
-    content = "#EXTM3U\n" + create_extinf(channel, stream_url)
+    content = "#EXTM3U\n#EXT-X-VERSION:3\n" + create_extinf(channel, stream_url)
     path.write_text(content, encoding="utf-8")
     return path
 
 
 def write_main_playlist(entries: List[str], output_folder: Path, output_playlist: str) -> Path:
+    """Ana playlist.m3u8 dosyasını oluşturur (HLS master playlist formatında)"""
     output_folder.mkdir(parents=True, exist_ok=True)
     path = output_folder / output_playlist
-    content = "#EXTM3U\n" + "\n".join(entries)
+    
+    # HLS master playlist formatı
+    content = "#EXTM3U\n#EXT-X-VERSION:3\n"
+    content += "\n".join(entries)
+    
     path.write_text(content, encoding="utf-8")
     return path
 
 
 def main() -> int:
     print("=" * 60)
-    print("🎬 TV Kanalları M3U Güncelleyici (Token + Cookie Desteği)")
+    print("🎬 TV Kanalları M3U8 Güncelleyici (HLS Formatında)")
     print("=" * 60)
     print(f"🕐 Başlangıç: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
@@ -378,6 +394,9 @@ def main() -> int:
 
     output_folder.mkdir(parents=True, exist_ok=True)
 
+    # Eski dosyaları temizle
+    for old_file in output_folder.glob("*.m3u8"):
+        old_file.unlink()
     for old_file in output_folder.glob("*.m3u"):
         old_file.unlink()
 
@@ -400,8 +419,12 @@ def main() -> int:
             failed_channels.append(name)
             continue
 
+        # Tek kanal dosyası oluştur
         single_file = write_single_channel_file(channel, stream_url, output_folder)
+        
+        # Ana playlist için entry (logasız, grupsuz)
         playlist_entries.append(create_extinf(channel, stream_url))
+        
         print(f"✅ {name}: {single_file} oluşturuldu")
 
     if playlist_entries:
@@ -417,8 +440,8 @@ def main() -> int:
         for channel_name in failed_channels:
             print(f"   - {channel_name}")
 
-    print(f"\n📄 Oluşan M3U dosyaları ({output_folder}/):")
-    for file in sorted(output_folder.glob("*.m3u")):
+    print(f"\n📄 Oluşan M3U8 dosyaları ({output_folder}/):")
+    for file in sorted(output_folder.glob("*.m3u8")):
         print(f"   - {file.name}")
 
     print(f"\n✅ İşlem tamamlandı: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
