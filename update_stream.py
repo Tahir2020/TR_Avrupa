@@ -8,10 +8,9 @@ import requests
 import random
 import time
 import urllib.parse
-import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 CONFIG_FILE = "config.json"
 COOKIE_FILE = "cookies.txt"
@@ -36,28 +35,15 @@ def load_config() -> Dict:
     config.setdefault("quality", "best[height<=1080][fps<=50]/best")
     config.setdefault("output_folder", "playlist")
     config.setdefault("output_playlist", "playlist.m3u8")
+    config.setdefault("resolution", "1280x720")
+    config.setdefault("bandwidth", "1280000")
+    
     return config
 
 
-def safe_filename(name: str) -> str:
-    replacements = {
-        "ç": "c", "Ç": "C",
-        "ğ": "g", "Ğ": "G",
-        "ı": "i", "İ": "I",
-        "ö": "o", "Ö": "O",
-        "ş": "s", "Ş": "S",
-        "ü": "u", "Ü": "U",
-    }
-    for old, new in replacements.items():
-        name = name.replace(old, new)
-
-    name = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_")
-    return f"{name or 'channel'}.m3u8"
-
-
-def is_direct_m3u8(url: str) -> bool:
-    clean = url.lower().split("?", 1)[0]
-    return clean.endswith(".m3u8")
+def is_token_channel(url: str) -> bool:
+    """Token gerektiren kanal mı kontrol et"""
+    return url == "token_kanal"
 
 
 def is_atv_avrupa_name(name: str) -> bool:
@@ -110,7 +96,7 @@ def load_netscape_cookies(cookie_file: str = COOKIE_FILE) -> Dict[str, str]:
     return cookies
 
 
-def get_atv_avrupa_token() -> Optional[str]:
+def get_atv_avrupa_stream() -> Optional[str]:
     """ATV Avrupa 576p - cookies.txt destekli otomatik token alıcı."""
     headers = {
         "X-isApp": "1",
@@ -145,13 +131,7 @@ def get_atv_avrupa_token() -> Optional[str]:
 
         if data.get("Success") and data.get("Url"):
             token_url_result = data.get("Url")
-            print("   ✅ ATV Avrupa token alındı")
-
-            match = re.search(r"[?&]e=(\d+)", token_url_result)
-            if match:
-                expire = datetime.fromtimestamp(int(match.group(1)))
-                print(f"   ⏰ ATV token süresi: {expire}")
-
+            print("   ✅ ATV Avrupa stream alındı")
             return token_url_result
 
         print(f"   ❌ ATV Avrupa token alınamadı: {data}")
@@ -159,14 +139,10 @@ def get_atv_avrupa_token() -> Optional[str]:
 
     except Exception as e:
         print(f"   ❌ ATV Avrupa hatası: {e}")
-        try:
-            print(f"   Cevap ilk 300 karakter: {response.text[:300]}")
-        except Exception:
-            pass
         return None
 
 
-def get_eurostar_token() -> Optional[str]:
+def get_eurostar_stream() -> Optional[str]:
     """EuroStar 1080p - HTML'den token çek."""
     headers = {
         "User-Agent": CHROME_UA,
@@ -206,7 +182,7 @@ def get_eurostar_token() -> Optional[str]:
             match = re.match(r"(.*/)live\.m3u8\?(.*)", master_url)
             if match:
                 stream_url = f"{match.group(1)}live_1080p3000000kbps/index.m3u8?{match.group(2)}"
-                print("   ✅ EuroStar 1080p token alındı")
+                print("   ✅ EuroStar 1080p stream alındı")
                 return stream_url
 
             print("   ✅ EuroStar master URL alındı")
@@ -220,7 +196,7 @@ def get_eurostar_token() -> Optional[str]:
         return None
 
 
-def get_show_turk_token() -> Optional[str]:
+def get_show_turk_stream() -> Optional[str]:
     """Show Türk - otomatik token alıcı."""
     url = "https://www.showturk.com.tr/canli-yayin"
     pattern = r"playlist\.m3u8\?e=(\d+)&st=([^\"\s&]+)"
@@ -238,7 +214,7 @@ def get_show_turk_token() -> Optional[str]:
         if match:
             e, st = match.groups()
             stream_url = f"https://ciner-live.ercdn.net/showturk/playlist.m3u8?e={e}&st={st}&tv=1"
-            print("   ✅ Show Türk token alındı")
+            print("   ✅ Show Türk stream alındı")
             return stream_url
 
         print("   ❌ Show Türk token bulunamadı")
@@ -250,6 +226,7 @@ def get_show_turk_token() -> Optional[str]:
 
 
 def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
+    """YouTube'dan stream URL alır"""
     cmd = [
         "yt-dlp",
         "-g",
@@ -271,6 +248,7 @@ def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
         )
 
         lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        
         for line in lines:
             if "manifest" in line or ".m3u8" in line:
                 return line
@@ -289,60 +267,54 @@ def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
         return None
 
 
-def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
-    """Kanal tipine göre stream URL'sini al."""
+def get_stream_url(channel: Dict, quality: str, config: Dict) -> Optional[str]:
+    """Kanal tipine göre stream URL'sini alır"""
     channel_name = channel.get("name", "")
+    channel_url = channel.get("url", "")
 
-    if is_atv_avrupa_name(channel_name):
-        print("🔐 ATV Avrupa için token alınıyor...")
-        return get_atv_avrupa_token()
-
-    if is_eurostar_name(channel_name):
-        print("🔐 EuroStar için token alınıyor...")
-        return get_eurostar_token()
-
-    if is_show_turk_name(channel_name):
-        print("🔐 Show Türk için token alınıyor...")
-        return get_show_turk_token()
-
-    url = channel.get("url") or channel.get("youtube_url")
-
-    if not url:
+    # Token gerektiren kanallar
+    if is_token_channel(channel_url):
+        if is_atv_avrupa_name(channel_name):
+            print("🔐 ATV Avrupa token alınıyor...")
+            return get_atv_avrupa_stream()
+        
+        elif is_eurostar_name(channel_name):
+            print("🔐 EuroStar token alınıyor...")
+            return get_eurostar_stream()
+        
+        elif is_show_turk_name(channel_name):
+            print("🔐 Show Türk token alınıyor...")
+            return get_show_turk_stream()
+        
+        else:
+            print(f"⚠️ {channel_name} için token handler bulunamadı")
+            return None
+    
+    # Direkt M3U8 linki
+    elif channel_url.lower().endswith(".m3u8") or ".m3u8?" in channel_url:
+        print("🔗 Direkt M3U8 linki kullanılıyor")
+        return channel_url
+    
+    # YouTube linki
+    elif "youtube.com" in channel_url or "youtu.be" in channel_url:
+        print("🎬 YouTube stream alınıyor...")
+        return get_youtube_stream_url(channel_url, quality)
+    
+    else:
+        print(f"⚠️ Bilinmeyen URL formatı: {channel_url}")
         return None
 
-    if is_direct_m3u8(url):
-        print("🔗 Direkt m3u8 linki kullanılıyor")
-        return url
 
-    print("🎬 YouTube stream alınıyor...")
-    return get_youtube_stream_url(url, quality)
-
-
-def create_extinf(channel: Dict, stream_url: str) -> str:
+def create_hls_master_entry(channel: Dict, stream_url: str, resolution: str, bandwidth: str) -> str:
     """
-    Basit EXTINF oluşturur (logasız, grupsuz)
+    HLS master playlist formatında EXT-X-STREAM-INF oluşturur
+    Örnek: #EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720
     """
-    name = channel["name"]
-    
-    return (
-        f'#EXTINF:-1,{name}\n'
-        f'{stream_url}\n'
-    )
+    return f'#EXT-X-STREAM-INF:BANDWIDTH={bandwidth},RESOLUTION={resolution}\n{stream_url}'
 
 
-def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Path) -> Path:
-    """Tek bir kanal için M3U8 dosyası oluşturur (HLS formatında)"""
-    output_folder.mkdir(parents=True, exist_ok=True)
-    filename = channel.get("m3u_file") or safe_filename(channel["name"])
-    path = output_folder / filename
-
-    content = "#EXTM3U\n#EXT-X-VERSION:3\n" + create_extinf(channel, stream_url)
-    path.write_text(content, encoding="utf-8")
-    return path
-
-
-def write_main_playlist(entries: List[str], output_folder: Path, output_playlist: str) -> Path:
-    """Ana playlist.m3u8 dosyasını oluşturur"""
+def write_master_playlist(entries: List[str], output_folder: Path, output_playlist: str) -> Path:
+    """Ana master playlist dosyasını oluşturur"""
     output_folder.mkdir(parents=True, exist_ok=True)
     path = output_folder / output_playlist
     
@@ -353,26 +325,9 @@ def write_main_playlist(entries: List[str], output_folder: Path, output_playlist
     return path
 
 
-def create_compatibility_links(output_folder: Path):
-    """Eski workflow için uyumluluk linkleri oluştur"""
-    main_m3u8 = output_folder / "playlist.m3u8"
-    playerlist_m3u = output_folder / "playerlist.m3u"
-    
-    if main_m3u8.exists():
-        # playerlist.m3u'yu oluştur (eski format için)
-        shutil.copy2(main_m3u8, playerlist_m3u)
-        print(f"✅ Uyumluluk dosyası oluşturuldu: {playerlist_m3u}")
-        
-        # Ayrıca playerlist.m3u8 de oluştur
-        playerlist_m3u8 = output_folder / "playerlist.m3u8"
-        if not playerlist_m3u8.exists():
-            shutil.copy2(main_m3u8, playerlist_m3u8)
-            print(f"✅ Uyumluluk dosyası oluşturuldu: {playerlist_m3u8}")
-
-
 def main() -> int:
     print("=" * 60)
-    print("🎬 TV Kanalları M3U8 Güncelleyici (HLS Formatında)")
+    print("🎬 TV Kanalları HLS Master Playlist Güncelleyici")
     print("=" * 60)
     print(f"🕐 Başlangıç: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
@@ -386,69 +341,80 @@ def main() -> int:
     quality = config["quality"]
     output_folder = Path(config["output_folder"])
     output_playlist = config["output_playlist"]
+    default_resolution = config.get("resolution", "1280x720")
+    default_bandwidth = config.get("bandwidth", "1280000")
 
     output_folder.mkdir(parents=True, exist_ok=True)
-
-    # Eski dosyaları temizle (playerlist.m3u hariç, sonra tekrar oluşturulacak)
-    for old_file in output_folder.glob("*.m3u8"):
-        if old_file.name != "playerlist.m3u8":
-            old_file.unlink()
-    for old_file in output_folder.glob("*.m3u"):
-        if old_file.name != "playerlist.m3u":
-            old_file.unlink()
 
     playlist_entries: List[str] = []
     failed_channels: List[str] = []
 
     for index, channel in enumerate(config["channels"], start=1):
         name = channel.get("name", f"Kanal {index}")
+        channel_url = channel.get("url", "")
 
-        if not (channel.get("url") or channel.get("youtube_url")):
-            print(f"\n⚠️ [{index}/{len(config['channels'])}] {name}: url/youtube_url yok, atlandı")
+        if not channel_url:
+            print(f"\n⚠️ [{index}/{len(config['channels'])}] {name}: url yok, atlandı")
             failed_channels.append(name)
             continue
 
         print(f"\n🔄 [{index}/{len(config['channels'])}] {name} taranıyor...")
-        stream_url = get_stream_url(channel, quality)
+        
+        # Kanal için resolution ve bandwidth ayarları
+        resolution = channel.get("resolution", default_resolution)
+        bandwidth = channel.get("bandwidth", default_bandwidth)
+        
+        # Token kanallar için özel resolution/bandwidth
+        if is_token_channel(channel_url):
+            if is_atv_avrupa_name(name):
+                resolution = "768x576"
+                bandwidth = "800000"
+            elif is_eurostar_name(name):
+                resolution = "1920x1080"
+                bandwidth = "3000000"
+            elif is_show_turk_name(name):
+                resolution = "1280x720"
+                bandwidth = "1500000"
+        
+        stream_url = get_stream_url(channel, quality, config)
 
         if not stream_url:
             print(f"❌ {name}: Stream URL alınamadı")
             failed_channels.append(name)
             continue
 
-        # Tek kanal dosyası oluştur
-        single_file = write_single_channel_file(channel, stream_url, output_folder)
+        # Master playlist entry oluştur
+        entry = create_hls_master_entry(channel, stream_url, resolution, bandwidth)
+        playlist_entries.append(entry)
         
-        # Ana playlist için entry
-        playlist_entries.append(create_extinf(channel, stream_url))
-        
-        print(f"✅ {name}: {single_file} oluşturuldu")
+        print(f"✅ {name}: {resolution} @ {int(bandwidth)//1000}kbps")
         
         # Rate limiting
         time.sleep(0.5)
 
     if playlist_entries:
-        main_playlist = write_main_playlist(playlist_entries, output_folder, output_playlist)
-        print(f"\n✅ Toplu liste oluşturuldu: {main_playlist}")
+        master_playlist = write_master_playlist(playlist_entries, output_folder, output_playlist)
+        print(f"\n✅ Master playlist oluşturuldu: {master_playlist}")
         print(f"✅ Başarılı kanal sayısı: {len(playlist_entries)}/{len(config['channels'])}")
         
-        # Uyumluluk linkleri oluştur
-        create_compatibility_links(output_folder)
+        # İçeriği göster
+        print("\n📄 Oluşan playlist içeriği:")
+        content = master_playlist.read_text(encoding="utf-8")
+        lines = content.split('\n')
+        for i, line in enumerate(lines[:20]):  # İlk 20 satırı göster
+            print(f"   {line}")
+        if len(lines) > 20:
+            print(f"   ... ve {len(lines)-20} satır daha")
     else:
         print("\n❌ Hiçbir kanal için link alınamadı")
         return 1
 
     if failed_channels:
-        print("\n⚠️ Alınamayan kanallar:")
-        for channel_name in failed_channels:
+        print(f"\n⚠️ Alınamayan kanallar ({len(failed_channels)}):")
+        for channel_name in failed_channels[:10]:
             print(f"   - {channel_name}")
-
-    print(f"\n📄 Oluşan M3U8 dosyaları ({output_folder}/):")
-    for file in sorted(output_folder.glob("*.m3u8")):
-        print(f"   - {file.name}")
-    for file in sorted(output_folder.glob("*.m3u")):
-        if file.name not in [f.name for f in output_folder.glob("*.m3u8")]:
-            print(f"   - {file.name}")
+        if len(failed_channels) > 10:
+            print(f"   ... ve {len(failed_channels)-10} kanal daha")
 
     print(f"\n✅ İşlem tamamlandı: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     return 0
