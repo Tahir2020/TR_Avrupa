@@ -4,28 +4,36 @@
   "output_playlist": "playerlist.m3u",
   "channels": [
     {
+      "name": "ATV Avrupa",
+      "url": "https://vavoo.to/play/3195910351/index.m3u8",
+      "logo": "https://dmedya.com/wp-content/uploads/2017/03/atv-avrupa-tv-logo-png-300x200.png",
+      "group": "Ulusal Kanallar",
+      "tvg_id": "atvavrupa.tr",
+      "m3u_file": "ATV_Avrupa.m3u"
+    },
+    {
       "name": "Euro Star TV",
-      "url": "https://www.youtube.com/watch?v=82O6yOy_XwE",
-      "logo": "https://i.postimg.cc/rFH05kkB/Star-TV-svg.png",
+      "url": "token_kanal",
+      "logo": "https://www.eurostartv.com.tr/img/eurostar-logo.png",
       "group": "Ulusal Kanallar",
       "tvg_id": "eurostar.tr",
       "m3u_file": "Euro_Star_TV.m3u"
     },
     {
-      "name": "Kanal Euro D",
-      "url": "https://live.duhnet.tv/S2/HLS_LIVE/eurodnp/playlist.m3u8",
-      "logo": "https://i.postimg.cc/Y2bmqFyq/Logo-Kanal-D-svg.png",
-      "group": "Ulusal Kanallar",
-      "tvg_id": "kanaleurod.tr",
-      "m3u_file": "Kanal_Euro_D.m3u"
-    },
-    {
       "name": "Show Türk",
-      "url": "https://www.youtube.com/watch?v=XnvS-RZa4Qw",
+      "url": "token_kanal",
       "logo": "https://i.postimg.cc/tR2dkHH3/Show-Turk-logo.png",
       "group": "Ulusal Kanallar",
       "tvg_id": "showturk.tr",
       "m3u_file": "Show_Turk.m3u"
+    },
+    {
+      "name": "Kanal Euro D",
+      "url": "https://live.duhnet.tv/S2/HLS_LIVE/eurodnp/playlist.m3u8",
+      "logo": "https://eurod.kanald.com.tr/assets/img/logo.v5.png",
+      "group": "Ulusal Kanallar",
+      "tvg_id": "kanaleurod.tr",
+      "m3u_file": "Kanal_Euro_D.m3u"
     },
     {
       "name": "Show Max",
@@ -34,14 +42,6 @@
       "group": "Ulusal Kanallar",
       "tvg_id": "showmax.tr",
       "m3u_file": "Show_Max.m3u"
-    },
-    {
-      "name": "ATV Avrupa",
-      "url": "https://www.youtube.com/watch?v=yeisTJeyDa8",
-      "logo": "https://dmedya.com/wp-content/uploads/2017/03/atv-avrupa-tv-logo-png-300x200.png",
-      "group": "Ulusal Kanallar",
-      "tvg_id": "atvavrupa.tr",
-      "m3u_file": "ATV_Avrupa.m3u"
     },
     {
       "name": "A2",
@@ -62,7 +62,7 @@
     {
       "name": "Kanal 7 Avrupa",
       "url": "https://livetv.radyotvonline.net/kanal7live/kanal7avr/playlist.m3u8",
-      "logo": "https://i.postimg.cc/PrSc4SVs/In-Shot-20250209-224757709.png",
+      "logo": "https://cdn.kanal7.com/kanal7/wp-content/themes/kanal7avrupa/images/kanal7avrupa_logo.png",
       "group": "Ulusal Kanallar",
       "tvg_id": "kanal7avrupa.tr",
       "m3u_file": "Kanal_7_Avrupa.m3u"
