@@ -1,0 +1,4 @@
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720
+https://live.duhnet.tv/S2/HLS_LIVE/eurodnp/playlist.m3u8
