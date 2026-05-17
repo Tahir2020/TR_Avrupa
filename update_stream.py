@@ -5,10 +5,12 @@ import re
 import subprocess
 import sys
 import requests
+import random
 import time
+import urllib.parse
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 CONFIG_FILE = "config.json"
 COOKIE_FILE = "cookies.txt"
@@ -20,9 +22,6 @@ CHROME_UA = (
 )
 
 
-# ------------------------------------------------------------
-# Config / helpers
-# ------------------------------------------------------------
 def load_config() -> Dict:
     with open(CONFIG_FILE, "r", encoding="utf-8") as f:
         config = json.load(f)
@@ -35,13 +34,11 @@ def load_config() -> Dict:
 
     config.setdefault("quality", "best[height<=1080][fps<=50]/best")
     config.setdefault("output_folder", "playlist")
-    config.setdefault("output_playlist", "playlist.m3u8")
-    config.setdefault("github_raw_base", "https://raw.githubusercontent.com/Tahir2020/TR_Avrupa/main")
+    config.setdefault("output_playlist", "playerlist.m3u")
     return config
 
 
 def safe_filename(name: str) -> str:
-    """Kanal adını güvenli dosya adına çevirir."""
     replacements = {
         "ç": "c", "Ç": "C",
         "ğ": "g", "Ğ": "G",
@@ -53,69 +50,123 @@ def safe_filename(name: str) -> str:
     for old, new in replacements.items():
         name = name.replace(old, new)
 
-    name = name.replace(" ", "_")
     name = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_")
-    return f"{name or 'channel'}.m3u8"
+    return f"{name or 'channel'}.m3u"
 
 
-def is_token_kanal(url: str) -> bool:
-    return url == "token_kanal"
+def is_direct_m3u8(url: str) -> bool:
+    clean = url.lower().split("?", 1)[0]
+    return clean.endswith(".m3u8")
+
+
+def is_atv_avrupa_name(name: str) -> bool:
+    lower = name.lower()
+    return "atv" in lower and "avrupa" in lower
 
 
 def is_eurostar_name(name: str) -> bool:
     lower = name.lower()
-    return "euro_star" in lower or "eurostar" in lower or "star_avrupa" in lower
+    return "euro star" in lower or "eurostar" in lower or "star avrupa" in lower
 
 
 def is_show_turk_name(name: str) -> bool:
     lower = name.lower()
-    return "show_turk" in lower or ("show" in lower and "turk" in lower)
+    return "show" in lower and ("türk" in lower or "turk" in lower)
 
 
-def cookie_file_exists() -> bool:
-    path = Path(COOKIE_FILE)
-    return path.exists() and path.stat().st_size > 0
-
-
-def load_netscape_cookies() -> Dict[str, str]:
+def load_netscape_cookies(cookie_file: str = COOKIE_FILE) -> Dict[str, str]:
+    """Netscape format cookies.txt dosyasını requests cookies dict formatına çevirir."""
     cookies: Dict[str, str] = {}
-    path = Path(COOKIE_FILE)
+    path = Path(cookie_file)
 
     if not path.exists():
+        print(f"   ℹ️ {cookie_file} bulunamadı, cookiesiz devam ediliyor")
         return cookies
 
     try:
         with path.open("r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
+
                 if not line or line.startswith("#"):
                     continue
+
                 parts = line.split("\t")
                 if len(parts) >= 7:
                     name = parts[5].strip()
                     value = parts[6].strip()
                     if name:
                         cookies[name] = value
+
+        if cookies:
+            print(f"   🍪 {len(cookies)} cookie yüklendi")
+        else:
+            print("   ⚠️ cookies.txt var ama okunabilir cookie bulunamadı")
+
     except Exception as e:
-        print(f"⚠️ Cookie okunamadı: {e}")
+        print(f"   ⚠️ Cookie okuma hatası: {e}")
 
     return cookies
 
 
-def print_yt_dlp_version() -> None:
+def get_atv_avrupa_token() -> Optional[str]:
+    """ATV Avrupa 576p - cookies.txt destekli otomatik token alıcı."""
+    headers = {
+        "X-isApp": "1",
+        "X-Rand": str(int(time.time() * 1000)),
+        "Origin": "https://www.atvavrupa.tv",
+        "Referer": "https://www.atvavrupa.tv/",
+        "User-Agent": CHROME_UA,
+        "Accept": "*/*",
+        "Accept-Language": "tr,en-US;q=0.9,en;q=0.8,de;q=0.7",
+    }
+
+    stream_url = "https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8"
+    encoded = urllib.parse.quote(stream_url)
+    token_url = (
+        "https://securevideotoken.tmgrup.com.tr/webtv/secure"
+        f"?{random.randint(1, 1000000)}&url={encoded}&url2={encoded}"
+    )
+
+    cookies = load_netscape_cookies()
+
     try:
-        result = subprocess.run(["yt-dlp", "--version"], capture_output=True, text=True, timeout=20)
-        version = result.stdout.strip() or result.stderr.strip()
-        print(f"ℹ️ yt-dlp sürümü: {version}")
+        response = requests.get(
+            token_url,
+            headers=headers,
+            cookies=cookies if cookies else None,
+            timeout=15,
+        )
+
+        print(f"   ATV token status: {response.status_code}")
+        response.raise_for_status()
+        data = response.json()
+
+        if data.get("Success") and data.get("Url"):
+            token_url_result = data.get("Url")
+            print("   ✅ ATV Avrupa token alındı")
+
+            match = re.search(r"[?&]e=(\d+)", token_url_result)
+            if match:
+                expire = datetime.fromtimestamp(int(match.group(1)))
+                print(f"   ⏰ ATV token süresi: {expire}")
+
+            return token_url_result
+
+        print(f"   ❌ ATV Avrupa token alınamadı: {data}")
+        return None
+
     except Exception as e:
-        print(f"⚠️ yt-dlp sürümü okunamadı: {e}")
+        print(f"   ❌ ATV Avrupa hatası: {e}")
+        try:
+            print(f"   Cevap ilk 300 karakter: {response.text[:300]}")
+        except Exception:
+            pass
+        return None
 
 
-# ------------------------------------------------------------
-# Token-based channels
-# ------------------------------------------------------------
 def get_eurostar_token() -> Optional[str]:
-    """EuroStar stream URL al."""
+    """EuroStar 1080p - HTML'den token çek."""
     headers = {
         "User-Agent": CHROME_UA,
         "Accept": "text/html,application/xhtml+xml",
@@ -127,22 +178,14 @@ def get_eurostar_token() -> Optional[str]:
         response = requests.get(page_url, headers=headers, timeout=15)
         html = response.text
 
-        patterns = [
-            r"var\s+liveUrl\s*=\s*'https://dygvideo\.dygdigital\.com/live/hls/staravrupa\?token=([a-f0-9]+)'",
-            r"https://dygvideo\.dygdigital\.com/live/hls/staravrupa\?token=([a-f0-9]+)",
-        ]
+        pattern = r"var liveUrl = 'https://dygvideo\.dygdigital\.com/live/hls/staravrupa\?token=([a-f0-9]+)';"
+        match = re.search(pattern, html)
 
-        token = None
-        for pattern in patterns:
-            match = re.search(pattern, html)
-            if match:
-                token = match.group(1)
-                break
-
-        if not token:
-            print("⚠️ EuroStar token sayfada bulunamadı")
+        if not match:
+            print("   ❌ EuroStar token HTML'de bulunamadı")
             return None
 
+        token = match.group(1)
         token_url = f"https://dygvideo.dygdigital.com/live/hls/staravrupa?token={token}"
 
         headers2 = {
@@ -151,110 +194,99 @@ def get_eurostar_token() -> Optional[str]:
             "User-Agent": CHROME_UA,
         }
 
-        response2 = requests.get(token_url, headers=headers2, allow_redirects=False, timeout=15)
+        response2 = requests.get(token_url, headers=headers2, allow_redirects=False, timeout=10)
 
-        if response2.status_code in (301, 302, 303, 307, 308):
+        if response2.status_code == 302:
             master_url = response2.headers.get("Location")
             if not master_url:
+                print("   ❌ EuroStar Location header boş")
                 return None
 
             match = re.match(r"(.*/)live\.m3u8\?(.*)", master_url)
             if match:
-                return f"{match.group(1)}live_1080p3000000kbps/index.m3u8?{match.group(2)}"
+                stream_url = f"{match.group(1)}live_1080p3000000kbps/index.m3u8?{match.group(2)}"
+                print("   ✅ EuroStar 1080p token alındı")
+                return stream_url
 
+            print("   ✅ EuroStar master URL alındı")
             return master_url
 
-        if ".m3u8" in response2.text:
-            return token_url
-
-        print(f"⚠️ EuroStar beklenmeyen cevap: HTTP {response2.status_code}")
+        print(f"   ❌ EuroStar redirect alınamadı: {response2.status_code}")
         return None
 
     except Exception as e:
-        print(f"❌ EuroStar token hatası: {e}")
+        print(f"   ❌ EuroStar hatası: {e}")
         return None
 
 
 def get_show_turk_token() -> Optional[str]:
-    """Show Türk stream URL al."""
+    """Show Türk - otomatik token alıcı."""
     url = "https://www.showturk.com.tr/canli-yayin"
-    patterns = [
-        r"playlist\.m3u8\?e=(\d+)&st=([^\"\s&]+)",
-        r"https?://[^\"'\s]+showturk[^\"'\s]+playlist\.m3u8\?e=(\d+)&st=([^\"'\s&]+)",
-    ]
+    pattern = r"playlist\.m3u8\?e=(\d+)&st=([^\"\s&]+)"
 
     headers = {
         "User-Agent": CHROME_UA,
         "Accept": "text/html,application/xhtml+xml",
-        "Referer": "https://www.showturk.com.tr/",
     }
 
     try:
-        response = requests.get(url, headers=headers, timeout=15)
+        response = requests.get(url, headers=headers, timeout=10)
         html = response.text
+        match = re.search(pattern, html)
 
-        for pattern in patterns:
-            match = re.search(pattern, html)
-            if match:
-                e, st = match.groups()
-                return f"https://ciner-live.ercdn.net/showturk/playlist.m3u8?e={e}&st={st}&tv=1"
-
-        print("⚠️ Show Türk token sayfada bulunamadı")
-        return None
-
-    except Exception as e:
-        print(f"❌ Show Türk token hatası: {e}")
-        return None
-
-
-# ------------------------------------------------------------
-# YouTube live handling
-# ------------------------------------------------------------
-def normalize_youtube_url(youtube_url: str) -> str:
-    """YouTube URL'sini mümkün olduğunca standart watch URL'sine çevir."""
-    youtube_url = youtube_url.strip()
-
-    patterns = [
-        r"(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/live/|youtube\.com/embed/)([a-zA-Z0-9_-]{11})",
-        r"(?:v=)([a-zA-Z0-9_-]{11})",
-    ]
-
-    for pattern in patterns:
-        match = re.search(pattern, youtube_url)
         if match:
-            return f"https://www.youtube.com/watch?v={match.group(1)}"
+            e, st = match.groups()
+            stream_url = f"https://ciner-live.ercdn.net/showturk/playlist.m3u8?e={e}&st={st}&tv=1"
+            print("   ✅ Show Türk token alındı")
+            return stream_url
 
-    return youtube_url
+        print("   ❌ Show Türk token bulunamadı")
+        return None
 
-
-def run_yt_dlp(cmd: List[str], label: str, timeout: int = 90) -> Tuple[str, str, int]:
-    """yt-dlp komutunu çalıştır ve kısa debug yazdır."""
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        stdout = (result.stdout or "").strip()
-        stderr = (result.stderr or "").strip()
-
-        if stderr:
-            # Secret/cookie içeriği basmıyoruz; sadece hata mesajının başını gösteriyoruz.
-            print(f"⚠️ yt-dlp stderr ({label}): {stderr[:500]}")
-
-        return stdout, stderr, result.returncode
-    except subprocess.TimeoutExpired:
-        print(f"⏱️ yt-dlp zaman aşımı ({label})")
-        return "", "timeout", 124
     except Exception as e:
-        print(f"❌ yt-dlp çalıştırılamadı ({label}): {e}")
-        return "", str(e), 1
+        print(f"   ❌ Show Türk hatası: {e}")
+        return None
 
 
-def extract_first_http_url(text: str, prefer_m3u8: bool = True) -> Optional[str]:
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
+def _run_ytdlp(cmd: List[str], label: str, timeout: int = 140) -> List[str]:
+    """yt-dlp çalıştır, çıktıyı temizle ve hata varsa kısa göster."""
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except Exception as e:
+        print(f"   ❌ yt-dlp çalıştırılamadı ({label}): {e}")
+        return []
 
-    if prefer_m3u8:
-        for line in lines:
-            if line.startswith("http") and ".m3u8" in line:
-                return line
+    stdout = (result.stdout or "").strip()
+    stderr = (result.stderr or "").strip()
 
+    if stderr:
+        # GitHub logunu okunabilir tutmak için çok uzunsa kısalt
+        short_err = stderr if len(stderr) <= 900 else stderr[:900] + " ..."
+        print(f"   ⚠️ yt-dlp stderr ({label}): {short_err}")
+
+    if result.returncode != 0:
+        print(f"   ❌ yt-dlp çıkış kodu ({label}): {result.returncode}")
+        return []
+
+    return [line.strip() for line in stdout.splitlines() if line.strip()]
+
+
+def _pick_stream_from_lines(lines: List[str]) -> Optional[str]:
+    """yt-dlp -g çıktısından oynatılabilir URL seç."""
+    if not lines:
+        return None
+
+    # Öncelik HLS / manifest
+    for line in lines:
+        if line.startswith("http") and (".m3u8" in line or "manifest" in line):
+            return line
+
+    # Bazı canlı yayınlarda yt-dlp direkt googlevideo URL döndürür
     for line in lines:
         if line.startswith("http"):
             return line
@@ -262,223 +294,179 @@ def extract_first_http_url(text: str, prefer_m3u8: bool = True) -> Optional[str]
     return None
 
 
-def get_youtube_stream_url_from_json(youtube_url: str) -> Optional[str]:
-    """yt-dlp -J ile JSON çekip HLS/m3u8 URL seç."""
-    cmd = [
-        "yt-dlp",
-        "--no-warnings",
-        "--no-playlist",
-        "--user-agent", CHROME_UA,
-        "-J",
-    ]
-
-    if cookie_file_exists():
-        cmd.extend(["--cookies", COOKIE_FILE])
-
-    cmd.append(youtube_url)
-
-    stdout, _, code = run_yt_dlp(cmd, "json", timeout=120)
-    if code != 0 or not stdout:
-        return None
-
-    try:
-        info = json.loads(stdout)
-    except json.JSONDecodeError as e:
-        print(f"⚠️ yt-dlp JSON okunamadı: {e}")
-        return None
-
-    # Bazen root url zaten m3u8 olur.
-    root_url = info.get("url")
-    if isinstance(root_url, str) and root_url.startswith("http") and ".m3u8" in root_url:
-        print("✅ YouTube JSON root m3u8 bulundu")
-        return root_url
-
-    formats = info.get("formats") or []
-    if not isinstance(formats, list):
-        return None
-
-    # HLS formatları tercih et. Önce yüksek çözünürlük, sonra yüksek bitrate.
-    candidates = []
-    for fmt in formats:
-        if not isinstance(fmt, dict):
-            continue
-        url = fmt.get("url")
-        protocol = str(fmt.get("protocol", ""))
-        ext = str(fmt.get("ext", ""))
-        if not isinstance(url, str) or not url.startswith("http"):
-            continue
-
-        is_hls = ".m3u8" in url or "m3u8" in protocol or ext == "m3u8"
-        if not is_hls:
-            continue
-
-        height = fmt.get("height") or 0
-        tbr = fmt.get("tbr") or 0
-        candidates.append((int(height or 0), float(tbr or 0), url))
-
-    if candidates:
-        candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
-        print("✅ YouTube JSON içinden HLS stream bulundu")
-        return candidates[0][2]
-
-    return None
-
-
 def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
     """
-    YouTube canlı yayın URL al.
+    YouTube canlı yayın URL'sini al.
 
-    Mantık:
-    1) Önce -g ile m3u8/stream dene.
-    2) Farklı player_client seçeneklerini dene.
-    3) Son çare JSON içinden HLS formatı seç.
-    4) Stderr'i logla ki gerçek hata GitHub Actions'ta görülsün.
+    Ana yöntem kullanıcının çalışan komutu:
+    --js-runtimes deno + --remote-components ejs:github + player_client=default
+
+    Sonra farklı player_client / format kombinasyonları denenir.
     """
-    youtube_url = normalize_youtube_url(youtube_url)
+    cookie_args: List[str] = []
+    if Path(COOKIE_FILE).exists() and Path(COOKIE_FILE).stat().st_size > 0:
+        cookie_args = ["--cookies", COOKIE_FILE]
+    else:
+        print("   ⚠️ cookies.txt boş veya yok; YouTube cookiesiz deneniyor")
 
-    if not cookie_file_exists():
-        print("⚠️ cookies.txt yok veya boş. YouTube bazı yayınlarda bot/oturum hatası verebilir.")
-
-    format_variants = [
-        quality,
-        "best[protocol=m3u8_native]/best[protocol=m3u8]/best",
-        "best",
-    ]
-
-    client_variants = [
-        "android",
-        "ios",
-        "web",
-        "tv",
-        "mweb",
-    ]
-
-    for client in client_variants:
-        for fmt in format_variants:
-            cmd = [
-                "yt-dlp",
-                "--no-warnings",
-                "--no-playlist",
-                "--user-agent", CHROME_UA,
-                "--extractor-args", f"youtube:player_client={client}",
-                "-f", fmt,
-                "-g",
-            ]
-
-            if cookie_file_exists():
-                cmd.extend(["--cookies", COOKIE_FILE])
-
-            cmd.append(youtube_url)
-
-            stdout, _, code = run_yt_dlp(cmd, f"{client}/{fmt}", timeout=100)
-            if code == 0 and stdout:
-                found = extract_first_http_url(stdout, prefer_m3u8=True)
-                if found:
-                    print(f"✅ YouTube stream bulundu ({client})")
-                    return found
-
-    # JSON fallback: bazı durumlarda -g yerine JSON daha stabil bilgi verir.
-    json_url = get_youtube_stream_url_from_json(youtube_url)
-    if json_url:
-        return json_url
-
-    # Force generic en son denensin.
-    cmd = [
+    common = [
         "yt-dlp",
+        "--no-playlist",
         "--no-warnings",
-        "--force-generic-extractor",
-        "-g",
-        youtube_url,
+        "--user-agent", CHROME_UA,
+        "--referer", "https://www.youtube.com/",
+        "--geo-bypass",
+        "--socket-timeout", "30",
+        *cookie_args,
     ]
-    stdout, _, code = run_yt_dlp(cmd, "generic", timeout=90)
-    if code == 0 and stdout:
-        found = extract_first_http_url(stdout, prefer_m3u8=True)
-        if found:
-            print("✅ YouTube generic extractor ile stream bulundu")
-            return found
 
-    return None
+    attempts: List[tuple[str, List[str]]] = []
 
+    # 1) Senin verdiğin çalışan yöntem: Deno + remote ejs + default client
+    attempts.append((
+        "deno/ejs/default",
+        [
+            *common,
+            "-g",
+            "--js-runtimes", "deno",
+            "--remote-components", "ejs:github",
+            "--extractor-args", "youtube:player_client=default",
+            "-f", quality,
+            youtube_url,
+        ],
+    ))
 
-# ------------------------------------------------------------
-# Playlist writing
-# ------------------------------------------------------------
-def get_direct_stream_url(url: str) -> Optional[str]:
-    if url and (url.endswith(".m3u8") or ".m3u8?" in url):
-        return url
+    # 2) Aynı yöntem ama HLS öncelikli format seçimi
+    attempts.append((
+        "deno/ejs/default/hls",
+        [
+            *common,
+            "-g",
+            "--js-runtimes", "deno",
+            "--remote-components", "ejs:github",
+            "--extractor-args", "youtube:player_client=default",
+            "-f", "best[protocol=m3u8_native]/best[protocol=m3u8]/best",
+            youtube_url,
+        ],
+    ))
+
+    # 3) Farklı client denemeleri
+    for client in ["android", "ios", "web", "tv", "mweb"]:
+        attempts.append((
+            f"deno/ejs/{client}",
+            [
+                *common,
+                "-g",
+                "--js-runtimes", "deno",
+                "--remote-components", "ejs:github",
+                "--extractor-args", f"youtube:player_client={client}",
+                "-f", "best[protocol=m3u8_native]/best[protocol=m3u8]/best",
+                youtube_url,
+            ],
+        ))
+
+    # 4) Deno olmadan klasik yt-dlp
+    for client in ["default", "android", "ios", "web", "tv"]:
+        attempts.append((
+            f"classic/{client}",
+            [
+                *common,
+                "-g",
+                "--extractor-args", f"youtube:player_client={client}",
+                "-f", "best[protocol=m3u8_native]/best[protocol=m3u8]/best",
+                youtube_url,
+            ],
+        ))
+
+    for label, cmd in attempts:
+        print(f"   ▶️ YouTube deneme: {label}")
+        lines = _run_ytdlp(cmd, label)
+        stream = _pick_stream_from_lines(lines)
+        if stream:
+            print(f"   ✅ YouTube stream bulundu: {label}")
+            return stream
+
+    print("   ❌ YouTube stream hiçbir yöntemle alınamadı")
     return None
 
 
 def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
     """Kanal tipine göre stream URL'sini al."""
     channel_name = channel.get("name", "")
-    url = channel.get("url", "")
 
-    if is_token_kanal(url):
-        if is_eurostar_name(channel_name):
-            print("🔐 EuroStar token alınıyor...")
-            return get_eurostar_token()
-        if is_show_turk_name(channel_name):
-            print("🔐 Show Türk token alınıyor...")
-            return get_show_turk_token()
+    if is_atv_avrupa_name(channel_name):
+        print("🔐 ATV Avrupa için token alınıyor...")
+        return get_atv_avrupa_token()
+
+    if is_eurostar_name(channel_name):
+        print("🔐 EuroStar için token alınıyor...")
+        return get_eurostar_token()
+
+    if is_show_turk_name(channel_name):
+        print("🔐 Show Türk için token alınıyor...")
+        return get_show_turk_token()
+
+    url = channel.get("url") or channel.get("youtube_url")
+
+    if not url:
         return None
 
-    if url and get_direct_stream_url(url):
-        print("🔗 Direkt M3U8 linki kullanılıyor")
+    if is_direct_m3u8(url):
+        print("🔗 Direkt m3u8 linki kullanılıyor")
         return url
 
-    if url and ("youtube.com" in url or "youtu.be" in url):
-        print("🎬 YouTube manifest alınıyor...")
-        return get_youtube_stream_url(url, quality)
-
-    return None
+    print("🎬 YouTube stream alınıyor...")
+    return get_youtube_stream_url(url, quality)
 
 
-def create_m3u8_content(stream_url: str) -> str:
-    """Temiz M3U8 formatı."""
+def create_extinf(channel: Dict, stream_url: str) -> str:
+    name = channel["name"]
+    logo = channel.get("logo", "")
+    group = channel.get("group", "Genel")
+    tvg_id = channel.get("tvg_id", safe_filename(name).replace(".m3u", "").lower())
+
+    extra = ""
+
+    if is_atv_avrupa_name(name):
+        extra = (
+            f"#EXTVLCOPT:http-user-agent={CHROME_UA}\n"
+            "#EXTVLCOPT:http-referrer=https://www.atvavrupa.tv/\n"
+            "#EXTVLCOPT:http-origin=https://www.atvavrupa.tv\n"
+            f"#KODIPROP:inputstream.adaptive.stream_headers=User-Agent={CHROME_UA}&Referer=https://www.atvavrupa.tv/&Origin=https://www.atvavrupa.tv\n"
+        )
+
     return (
-        "#EXTM3U\n"
-        "#EXT-X-VERSION:3\n"
-        "#EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720\n"
-        f"{stream_url}\n"
+        f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{name}" '
+        f'tvg-logo="{logo}" group-title="{group}",{name}\n'
+        f'{extra}'
+        f'{stream_url}\n'
     )
 
 
-def write_channel_m3u8(stream_url: str, output_path: Path) -> Path:
-    content = create_m3u8_content(stream_url)
-    output_path.write_text(content, encoding="utf-8")
-    return output_path
+def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Path) -> Path:
+    output_folder.mkdir(parents=True, exist_ok=True)
+    filename = channel.get("m3u_file") or safe_filename(channel["name"])
+    path = output_folder / filename
+
+    content = "#EXTM3U\n" + create_extinf(channel, stream_url)
+    path.write_text(content, encoding="utf-8")
+    return path
 
 
-def write_main_playlist(channels: List[Dict], output_folder: Path, output_playlist: str, github_raw_base: str) -> Path:
+def write_main_playlist(entries: List[str], output_folder: Path, output_playlist: str) -> Path:
     output_folder.mkdir(parents=True, exist_ok=True)
     path = output_folder / output_playlist
-
-    content = "#EXTM3U\n"
-    for channel in channels:
-        name = channel.get("name", "Unknown")
-        filename = safe_filename(name)
-        raw_url = f"{github_raw_base}/playlist/{filename}"
-        content += f"#EXTINF:-1,{name}\n"
-        content += f"{raw_url}\n"
-
+    content = "#EXTM3U\n" + "\n".join(entries)
     path.write_text(content, encoding="utf-8")
     return path
 
 
 def main() -> int:
     print("=" * 60)
-    print("🎬 M3U8 Playlist Oluşturucu")
+    print("🎬 TV Kanalları M3U Güncelleyici (Token + Cookie Desteği)")
     print("=" * 60)
     print(f"🕐 Başlangıç: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
-
-    print_yt_dlp_version()
-
-    if cookie_file_exists():
-        print("✅ cookies.txt bulundu")
-    else:
-        print("⚠️ cookies.txt bulunamadı veya boş")
 
     try:
         config = load_config()
@@ -489,23 +477,38 @@ def main() -> int:
     quality = config["quality"]
     output_folder = Path(config["output_folder"])
     output_playlist = config["output_playlist"]
-    github_raw_base = config.get("github_raw_base", "")
+
+    try:
+        version = subprocess.run(["yt-dlp", "--version"], capture_output=True, text=True, timeout=20).stdout.strip()
+        print(f"ℹ️ yt-dlp sürümü: {version}")
+    except Exception as e:
+        print(f"⚠️ yt-dlp sürümü okunamadı: {e}")
+
+    cookie_path = Path(COOKIE_FILE)
+    if cookie_path.exists():
+        cookie_lines = cookie_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        print(f"✅ {COOKIE_FILE} bulundu")
+        print(f"📄 Cookie satır sayısı: {len(cookie_lines)}")
+        if any("youtube.com" in line for line in cookie_lines):
+            print("✅ YouTube cookie domain bulundu")
+        else:
+            print("⚠️ YouTube cookie domain bulunamadı")
+    else:
+        print(f"⚠️ {COOKIE_FILE} bulunamadı")
 
     output_folder.mkdir(parents=True, exist_ok=True)
 
-    # Eski M3U8 dosyalarını temizle.
-    for old_file in output_folder.glob("*.m3u8"):
-        if old_file.name != output_playlist:
-            old_file.unlink()
+    for old_file in output_folder.glob("*.m3u"):
+        old_file.unlink()
 
-    successful_channels: List[Dict] = []
+    playlist_entries: List[str] = []
     failed_channels: List[str] = []
 
     for index, channel in enumerate(config["channels"], start=1):
         name = channel.get("name", f"Kanal {index}")
 
-        if not channel.get("url"):
-            print(f"\n⚠️ [{index}/{len(config['channels'])}] {name}: url yok, atlandı")
+        if not (channel.get("url") or channel.get("youtube_url")):
+            print(f"\n⚠️ [{index}/{len(config['channels'])}] {name}: url/youtube_url yok, atlandı")
             failed_channels.append(name)
             continue
 
@@ -517,37 +520,26 @@ def main() -> int:
             failed_channels.append(name)
             continue
 
-        filename = safe_filename(name)
-        output_path = output_folder / filename
-        write_channel_m3u8(stream_url, output_path)
+        single_file = write_single_channel_file(channel, stream_url, output_folder)
+        playlist_entries.append(create_extinf(channel, stream_url))
+        print(f"✅ {name}: {single_file} oluşturuldu")
 
-        successful_channels.append(channel)
-        print(f"✅ {name} -> {filename}")
-
-        # YouTube'a çok hızlı art arda yüklenmemek için küçük bekleme.
-        time.sleep(1)
-
-    if successful_channels and github_raw_base:
-        main_playlist = write_main_playlist(successful_channels, output_folder, output_playlist, github_raw_base)
-        print(f"\n✅ Ana playlist: {main_playlist}")
-        print(f"✅ Başarılı: {len(successful_channels)}/{len(config['channels'])}")
-    elif successful_channels:
-        print(f"\n✅ {len(successful_channels)} kanal başarıyla oluşturuldu")
+    if playlist_entries:
+        main_playlist = write_main_playlist(playlist_entries, output_folder, output_playlist)
+        print(f"\n✅ Toplu liste oluşturuldu: {main_playlist}")
+        print(f"✅ Başarılı kanal sayısı: {len(playlist_entries)}/{len(config['channels'])}")
     else:
         print("\n❌ Hiçbir kanal için link alınamadı")
         return 1
 
     if failed_channels:
-        print(f"\n⚠️ Alınamayan kanallar ({len(failed_channels)}):")
-        for channel_name in failed_channels[:30]:
+        print("\n⚠️ Alınamayan kanallar:")
+        for channel_name in failed_channels:
             print(f"   - {channel_name}")
-        if len(failed_channels) > 30:
-            print(f"   ... ve {len(failed_channels) - 30} kanal daha")
 
-    print(f"\n📄 Oluşan M3U8 dosyaları ({output_folder}/):")
-    for file in sorted(output_folder.glob("*.m3u8")):
-        if file.name != output_playlist:
-            print(f"   - {file.name}")
+    print(f"\n📄 Oluşan M3U dosyaları ({output_folder}/):")
+    for file in sorted(output_folder.glob("*.m3u")):
+        print(f"   - {file.name}")
 
     print(f"\n✅ İşlem tamamlandı: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     return 0
