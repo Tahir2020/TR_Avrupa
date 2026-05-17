@@ -5,9 +5,6 @@ import re
 import subprocess
 import sys
 import requests
-import random
-import time
-import urllib.parse
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -68,10 +65,6 @@ def normalize_channel_name(name: str) -> str:
     """
     return re.sub(r"[_\-]+", " ", name.lower()).strip()
 
-
-def is_atv_avrupa_name(name: str) -> bool:
-    lower = normalize_channel_name(name)
-    return "atv" in lower and "avrupa" in lower
 
 
 def is_eurostar_name(name: str) -> bool:
@@ -348,10 +341,6 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
     """Kanal tipine göre stream URL'sini al."""
     channel_name = channel.get("name", "")
 
-    if is_atv_avrupa_name(channel_name):
-        print("🔐 ATV Avrupa için token alınıyor...")
-        return get_atv_avrupa_token()
-
     if is_eurostar_name(channel_name):
         print("🔐 EuroStar için token alınıyor...")
         return get_eurostar_token()
@@ -381,14 +370,6 @@ def create_extinf(channel: Dict, stream_url: str) -> str:
 
     extra = ""
 
-    if is_atv_avrupa_name(name):
-        extra = (
-            f"#EXTVLCOPT:http-user-agent={CHROME_UA}\n"
-            "#EXTVLCOPT:http-referrer=https://www.atvavrupa.tv/\n"
-            "#EXTVLCOPT:http-origin=https://www.atvavrupa.tv\n"
-            f"#KODIPROP:inputstream.adaptive.stream_headers=User-Agent={CHROME_UA}&Referer=https://www.atvavrupa.tv/&Origin=https://www.atvavrupa.tv\n"
-        )
-
     return (
         f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{name}" '
         f'tvg-logo="{logo}" group-title="{group}",{name}\n'
@@ -412,7 +393,7 @@ def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Pat
 
     path.write_text(content, encoding="utf-8")
     return path
-    
+
 
 def playlist_display_name(channel: Dict) -> str:
     """Ana playlistte görünecek kanal adını dosya adına göre üretir."""
