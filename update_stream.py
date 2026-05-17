@@ -463,15 +463,35 @@ def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Pat
     return path
 
 
-def write_main_playlist(entries: List[str], output_folder: Path, output_playlist: str) -> Path:
-    """Ana playlisti yazar.
+def playlist_display_name(channel: Dict) -> str:
+    """Ana playlistte görünecek kanal adını dosya adına göre üretir."""
+    filename = channel.get("m3u_file") or safe_filename(channel.get("name", "channel"))
+    return re.sub(r"\.m3u8?$", "", filename, flags=re.IGNORECASE)
 
-    Workflow/config isim uyuşmazlığı tekrar hata vermesin diye ana listeyi
-    configteki isimle yazar; ayrıca yaygın kullanılan diğer ana liste adını da
-    aynı içerikle oluşturur. Böylece hem playerlist.m3u hem playlist.m3u8 bulunur.
+
+def write_main_playlist(channels: List[Dict], output_folder: Path, output_playlist: str) -> Path:
+    """Ana playlisti kanal dosyalarına Raw GitHub linki verecek şekilde yazar.
+
+    Örnek çıktı:
+    #EXTM3U
+    #EXTINF:-1,24_TV
+    https://raw.githubusercontent.com/Tahir2020/TR_Avrupa/refs/heads/main/playlist/24_TV.m3u
+
+    Ayrıca isim uyuşmazlığı yaşanmaması için hem playerlist.m3u hem playlist.m3u8
+    aynı içerikle oluşturulur.
     """
     output_folder.mkdir(parents=True, exist_ok=True)
-    content = "#EXTM3U\n" + "\n".join(entries)
+
+    github_base = "https://raw.githubusercontent.com/Tahir2020/TR_Avrupa/refs/heads/main/playlist"
+
+    lines = ["#EXTM3U"]
+    for channel in channels:
+        filename = channel.get("m3u_file") or safe_filename(channel.get("name", "channel"))
+        display_name = playlist_display_name(channel)
+        lines.append(f"#EXTINF:-1,{display_name}")
+        lines.append(f"{github_base}/{filename}")
+
+    content = "\n".join(lines) + "\n"
 
     path = output_folder / output_playlist
     path.write_text(content, encoding="utf-8")
@@ -526,6 +546,7 @@ def main() -> int:
             old_file.unlink()
 
     playlist_entries: List[str] = []
+    successful_channels: List[Dict] = []
     failed_channels: List[str] = []
 
     for index, channel in enumerate(config["channels"], start=1):
@@ -546,12 +567,13 @@ def main() -> int:
 
         single_file = write_single_channel_file(channel, stream_url, output_folder)
         playlist_entries.append(create_extinf(channel, stream_url))
+        successful_channels.append(channel)
         print(f"✅ {name}: {single_file} oluşturuldu")
 
-    if playlist_entries:
-        main_playlist = write_main_playlist(playlist_entries, output_folder, output_playlist)
+    if successful_channels:
+        main_playlist = write_main_playlist(successful_channels, output_folder, output_playlist)
         print(f"\n✅ Toplu liste oluşturuldu: {main_playlist}")
-        print(f"✅ Başarılı kanal sayısı: {len(playlist_entries)}/{len(config['channels'])}")
+        print(f"✅ Başarılı kanal sayısı: {len(successful_channels)}/{len(config['channels'])}")
     else:
         print("\n❌ Hiçbir kanal için link alınamadı")
         return 1
