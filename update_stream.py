@@ -119,62 +119,6 @@ def load_netscape_cookies(cookie_file: str = COOKIE_FILE) -> Dict[str, str]:
     return cookies
 
 
-def get_atv_avrupa_token() -> Optional[str]:
-    """ATV Avrupa 576p - cookies.txt destekli otomatik token alıcı."""
-    headers = {
-        "X-isApp": "1",
-        "X-Rand": str(int(time.time() * 1000)),
-        "Origin": "https://www.atvavrupa.tv",
-        "Referer": "https://www.atvavrupa.tv/",
-        "User-Agent": CHROME_UA,
-        "Accept": "*/*",
-        "Accept-Language": "tr,en-US;q=0.9,en;q=0.8,de;q=0.7",
-    }
-
-    stream_url = "https://trkvz-live.ercdn.net/atvavrupa/atvavrupa_576p.m3u8"
-    encoded = urllib.parse.quote(stream_url)
-    token_url = (
-        "https://securevideotoken.tmgrup.com.tr/webtv/secure"
-        f"?{random.randint(1, 1000000)}&url={encoded}&url2={encoded}"
-    )
-
-    cookies = load_netscape_cookies()
-
-    try:
-        response = requests.get(
-            token_url,
-            headers=headers,
-            cookies=cookies if cookies else None,
-            timeout=15,
-        )
-
-        print(f"   ATV token status: {response.status_code}")
-        response.raise_for_status()
-        data = response.json()
-
-        if data.get("Success") and data.get("Url"):
-            token_url_result = data.get("Url")
-            print("   ✅ ATV Avrupa token alındı")
-
-            match = re.search(r"[?&]e=(\d+)", token_url_result)
-            if match:
-                expire = datetime.fromtimestamp(int(match.group(1)))
-                print(f"   ⏰ ATV token süresi: {expire}")
-
-            return token_url_result
-
-        print(f"   ❌ ATV Avrupa token alınamadı: {data}")
-        return None
-
-    except Exception as e:
-        print(f"   ❌ ATV Avrupa hatası: {e}")
-        try:
-            print(f"   Cevap ilk 300 karakter: {response.text[:300]}")
-        except Exception:
-            pass
-        return None
-
-
 def get_eurostar_token() -> Optional[str]:
     """EuroStar 1080p - HTML'den token çek."""
     headers = {
