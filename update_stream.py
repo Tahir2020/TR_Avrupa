@@ -59,18 +59,28 @@ def is_direct_m3u8(url: str) -> bool:
     return clean.endswith(".m3u8")
 
 
+def normalize_channel_name(name: str) -> str:
+    """Kanal adını karşılaştırma için normalize eder.
+
+    Config bazen boşluklu ad, bazen alt çizgili ad kullanıyor
+    (Euro Star TV / Euro_Star_TV gibi). Bu yüzden token kanalı
+    algılamada alt çizgi ve tireleri boşluk kabul ediyoruz.
+    """
+    return re.sub(r"[_\-]+", " ", name.lower()).strip()
+
+
 def is_atv_avrupa_name(name: str) -> bool:
-    lower = name.lower()
+    lower = normalize_channel_name(name)
     return "atv" in lower and "avrupa" in lower
 
 
 def is_eurostar_name(name: str) -> bool:
-    lower = name.lower()
+    lower = normalize_channel_name(name)
     return "euro star" in lower or "eurostar" in lower or "star avrupa" in lower
 
 
 def is_show_turk_name(name: str) -> bool:
-    lower = name.lower()
+    lower = normalize_channel_name(name)
     return "show" in lower and ("türk" in lower or "turk" in lower)
 
 
@@ -454,10 +464,23 @@ def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Pat
 
 
 def write_main_playlist(entries: List[str], output_folder: Path, output_playlist: str) -> Path:
+    """Ana playlisti yazar.
+
+    Workflow/config isim uyuşmazlığı tekrar hata vermesin diye ana listeyi
+    configteki isimle yazar; ayrıca yaygın kullanılan diğer ana liste adını da
+    aynı içerikle oluşturur. Böylece hem playerlist.m3u hem playlist.m3u8 bulunur.
+    """
     output_folder.mkdir(parents=True, exist_ok=True)
-    path = output_folder / output_playlist
     content = "#EXTM3U\n" + "\n".join(entries)
+
+    path = output_folder / output_playlist
     path.write_text(content, encoding="utf-8")
+
+    aliases = {"playerlist.m3u", "playlist.m3u8"}
+    aliases.discard(output_playlist)
+    for alias in sorted(aliases):
+        (output_folder / alias).write_text(content, encoding="utf-8")
+
     return path
 
 
@@ -498,8 +521,9 @@ def main() -> int:
 
     output_folder.mkdir(parents=True, exist_ok=True)
 
-    for old_file in output_folder.glob("*.m3u"):
-        old_file.unlink()
+    for pattern in ("*.m3u", "*.m3u8"):
+        for old_file in output_folder.glob(pattern):
+            old_file.unlink()
 
     playlist_entries: List[str] = []
     failed_channels: List[str] = []
