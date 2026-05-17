@@ -33,7 +33,7 @@ def load_config() -> Dict:
     config.setdefault("quality", "best[height<=1080][fps<=50]/best")
     config.setdefault("output_folder", "playlist")
     config.setdefault("output_playlist", "playlist.m3u8")
-    config.setdefault("github_raw_base", "")
+    config.setdefault("github_raw_base", "https://raw.githubusercontent.com/Tahir2020/TR_Avrupa/main")
     return config
 
 
@@ -50,9 +50,7 @@ def safe_filename(name: str) -> str:
     for old, new in replacements.items():
         name = name.replace(old, new)
 
-    # Boşlukları alt çizgiye çevir
     name = name.replace(" ", "_")
-    # Özel karakterleri temizle
     name = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_")
     return f"{name or 'channel'}.m3u8"
 
@@ -171,18 +169,23 @@ def get_show_turk_token() -> Optional[str]:
 
 
 def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
-    """YouTube manifest URL al - gelişmiş yt-dlp parametreleri ile"""
+    """
+    YouTube manifest URL al - yt-dlp ile cookies kullanarak
+    """
+    # Önce video ID'yi al
+    video_id_match = re.search(r'(?:v=|\/)([a-zA-Z0-9_-]{11})', youtube_url)
+    if not video_id_match:
+        return None
+    
+    video_id = video_id_match.group(1)
+    
+    # yt-dlp komutu - daha basit ve güvenilir
     cmd = [
         "yt-dlp",
         "-g",
         "--cookies", COOKIE_FILE,
-        "--extractor-args", "youtube:player_client=android,youtube",
-        "--extractor-args", "youtube:player_skip=webpage",
-        "--extractor-args", "youtube:skip=hls,webpage,dash",
-        "--extractor-args", "youtube:include_live_dash=False",
-        "--no-check-certificates",
         "-f", "best[protocol=m3u8_native]/best",
-        youtube_url,
+        f"https://www.youtube.com/watch?v={video_id}"
     ]
 
     try:
@@ -190,28 +193,24 @@ def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
             cmd,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=90,
         )
-
-        # yt-dlp hata verse de stdout'da URL olabilir
+        
+        # Önce çıktıyı kontrol et
         lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        
+        for line in lines:
+            if ".m3u8" in line and "manifest" in line:
+                return line
         
         for line in lines:
             if ".m3u8" in line:
                 return line
-
-        # Eğer stdout'da bulunamadıysa stderr'i kontrol et
-        if result.stderr:
-            stderr_lines = [line.strip() for line in result.stderr.splitlines() if "manifest" in line.lower() and "m3u8" in line.lower()]
-            for line in stderr_lines:
-                match = re.search(r'(https?://[^\s]+\.m3u8[^\s]*)', line)
-                if match:
-                    return match.group(1)
-
+                
         return None
 
     except subprocess.TimeoutExpired:
-        print("   ❌ yt-dlp zaman aşımı")
+        print("   ❌ Zaman aşımı")
         return None
     except Exception as e:
         print(f"   ❌ Hata: {e}")
@@ -219,7 +218,6 @@ def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
 
 
 def get_direct_stream_url(url: str) -> Optional[str]:
-    """Direkt M3U8 URL'ini kontrol et ve döndür"""
     if url and (url.endswith(".m3u8") or ".m3u8?" in url):
         return url
     return None
@@ -246,8 +244,8 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
         return url
     
     # YouTube kanalı
-    youtube_url = channel.get("youtube_url", "")
-    if youtube_url:
+    youtube_url = channel.get("url", "")
+    if youtube_url and ("youtube.com" in youtube_url or "youtu.be" in youtube_url):
         print("🎬 YouTube manifest alınıyor...")
         return get_youtube_stream_url(youtube_url, quality)
     
@@ -255,13 +253,7 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
 
 
 def create_m3u8_content(stream_url: str) -> str:
-    """
-    Temiz M3U8 formatında içerik oluşturur:
-    #EXTM3U
-    #EXT-X-VERSION:3
-    #EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720
-    [STREAM_URL]
-    """
+    """Temiz M3U8 formatı"""
     return (
         f"#EXTM3U\n"
         f"#EXT-X-VERSION:3\n"
@@ -271,16 +263,12 @@ def create_m3u8_content(stream_url: str) -> str:
 
 
 def write_channel_m3u8(stream_url: str, output_path: Path) -> Path:
-    """Tek kanal için M3U8 dosyası oluşturur"""
     content = create_m3u8_content(stream_url)
     output_path.write_text(content, encoding="utf-8")
     return output_path
 
 
 def write_main_playlist(channels: List[Dict], output_folder: Path, output_playlist: str, github_raw_base: str) -> Path:
-    """
-    Ana playlist dosyasını oluşturur - sadece kanal adı ve GitHub raw linki
-    """
     output_folder.mkdir(parents=True, exist_ok=True)
     path = output_folder / output_playlist
     
@@ -298,7 +286,7 @@ def write_main_playlist(channels: List[Dict], output_folder: Path, output_playli
 
 def main() -> int:
     print("=" * 60)
-    print("🎬 M3U8 Playlist Oluşturucu (Temiz Format)")
+    print("🎬 M3U8 Playlist Oluşturucu")
     print("=" * 60)
     print(f"🕐 Başlangıç: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
@@ -316,7 +304,7 @@ def main() -> int:
 
     output_folder.mkdir(parents=True, exist_ok=True)
 
-    # Eski M3U8 dosyalarını temizle (ana playlist hariç)
+    # Eski M3U8 dosyalarını temizle
     for old_file in output_folder.glob("*.m3u8"):
         if old_file.name != output_playlist:
             old_file.unlink()
@@ -327,10 +315,8 @@ def main() -> int:
     for index, channel in enumerate(config["channels"], start=1):
         name = channel.get("name", f"Kanal {index}")
 
-        # URL veya youtube_url kontrolü
-        has_url = channel.get("url") or channel.get("youtube_url")
-        if not has_url:
-            print(f"\n⚠️ [{index}/{len(config['channels'])}] {name}: url/youtube_url yok, atlandı")
+        if not channel.get("url"):
+            print(f"\n⚠️ [{index}/{len(config['channels'])}] {name}: url yok, atlandı")
             failed_channels.append(name)
             continue
 
@@ -342,7 +328,6 @@ def main() -> int:
             failed_channels.append(name)
             continue
 
-        # Kanal için ayrı M3U8 dosyası oluştur
         filename = safe_filename(name)
         output_path = output_folder / filename
         write_channel_m3u8(stream_url, output_path)
@@ -350,15 +335,12 @@ def main() -> int:
         successful_channels.append(channel)
         print(f"✅ {name} -> {filename}")
 
-    # Ana playlist oluştur
     if successful_channels and github_raw_base:
         main_playlist = write_main_playlist(successful_channels, output_folder, output_playlist, github_raw_base)
-        print(f"\n✅ Ana playlist oluşturuldu: {main_playlist}")
+        print(f"\n✅ Ana playlist: {main_playlist}")
         print(f"✅ Başarılı: {len(successful_channels)}/{len(config['channels'])}")
     elif successful_channels:
         print(f"\n✅ {len(successful_channels)} kanal başarıyla oluşturuldu")
-        if not github_raw_base:
-            print("⚠️ github_raw_base tanımlı olmadığı için ana playlist oluşturulmadı")
     else:
         print("\n❌ Hiçbir kanal için link alınamadı")
         return 1
