@@ -171,15 +171,17 @@ def get_show_turk_token() -> Optional[str]:
 
 
 def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
-    """YouTube manifest URL al - beIN Sports formatında"""
+    """YouTube manifest URL al - gelişmiş yt-dlp parametreleri ile"""
     cmd = [
         "yt-dlp",
         "-g",
         "--cookies", COOKIE_FILE,
-        "--js-runtimes", "deno",
-        "--remote-components", "ejs:github",
-        "--extractor-args", "youtube:player_client=default",
-        "-f", quality,
+        "--extractor-args", "youtube:player_client=android,youtube",
+        "--extractor-args", "youtube:player_skip=webpage",
+        "--extractor-args", "youtube:skip=hls,webpage,dash",
+        "--extractor-args", "youtube:include_live_dash=False",
+        "--no-check-certificates",
+        "-f", "best[protocol=m3u8_native]/best",
         youtube_url,
     ]
 
@@ -188,28 +190,28 @@ def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
             cmd,
             capture_output=True,
             text=True,
-            check=True,
             timeout=120,
         )
 
+        # yt-dlp hata verse de stdout'da URL olabilir
         lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
-        
-        # Manifest URL'ini bul
-        for line in lines:
-            if "manifest" in line and ".m3u8" in line:
-                return line
         
         for line in lines:
             if ".m3u8" in line:
                 return line
 
-        if lines:
-            return lines[0]
+        # Eğer stdout'da bulunamadıysa stderr'i kontrol et
+        if result.stderr:
+            stderr_lines = [line.strip() for line in result.stderr.splitlines() if "manifest" in line.lower() and "m3u8" in line.lower()]
+            for line in stderr_lines:
+                match = re.search(r'(https?://[^\s]+\.m3u8[^\s]*)', line)
+                if match:
+                    return match.group(1)
 
         return None
 
-    except subprocess.CalledProcessError as e:
-        print(f"   ❌ yt-dlp hatası: {e.stderr[:200]}")
+    except subprocess.TimeoutExpired:
+        print("   ❌ yt-dlp zaman aşımı")
         return None
     except Exception as e:
         print(f"   ❌ Hata: {e}")
@@ -278,9 +280,6 @@ def write_channel_m3u8(stream_url: str, output_path: Path) -> Path:
 def write_main_playlist(channels: List[Dict], output_folder: Path, output_playlist: str, github_raw_base: str) -> Path:
     """
     Ana playlist dosyasını oluşturur - sadece kanal adı ve GitHub raw linki
-    #EXTM3U
-    #EXTINF:-1,Kanal_Adi
-    https://raw.githubusercontent.com/.../playlist/Kanal_Adi.m3u8
     """
     output_folder.mkdir(parents=True, exist_ok=True)
     path = output_folder / output_playlist
@@ -314,10 +313,6 @@ def main() -> int:
     output_folder = Path(config["output_folder"])
     output_playlist = config["output_playlist"]
     github_raw_base = config.get("github_raw_base", "")
-
-    if not github_raw_base:
-        print("⚠️ Uyarı: github_raw_base config.json'da tanımlanmamış!")
-        print("   Ana playlist oluşturulurken raw linkler kullanılacak")
 
     output_folder.mkdir(parents=True, exist_ok=True)
 
@@ -354,7 +349,6 @@ def main() -> int:
         
         successful_channels.append(channel)
         print(f"✅ {name} -> {filename}")
-        print(f"   📹 URL: {stream_url[:80]}...")
 
     # Ana playlist oluştur
     if successful_channels and github_raw_base:
@@ -363,13 +357,14 @@ def main() -> int:
         print(f"✅ Başarılı: {len(successful_channels)}/{len(config['channels'])}")
     elif successful_channels:
         print(f"\n✅ {len(successful_channels)} kanal başarıyla oluşturuldu")
-        print("⚠️ github_raw_base tanımlı olmadığı için ana playlist oluşturulmadı")
+        if not github_raw_base:
+            print("⚠️ github_raw_base tanımlı olmadığı için ana playlist oluşturulmadı")
     else:
         print("\n❌ Hiçbir kanal için link alınamadı")
         return 1
 
     if failed_channels:
-        print("\n⚠️ Alınamayan kanallar:")
+        print(f"\n⚠️ Alınamayan kanallar ({len(failed_channels)}):")
         for channel_name in failed_channels:
             print(f"   - {channel_name}")
 
