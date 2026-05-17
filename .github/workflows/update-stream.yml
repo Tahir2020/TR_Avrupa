@@ -2,7 +2,7 @@ name: TV Kanalları - Playlist Güncelleme
 
 on:
   schedule:
-    - cron: '0 * * * *'  # Her 1 saatte bir
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -21,21 +21,13 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 📦 Node.js kurulumu (yt-dlp için)
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: 📦 yt-dlp ve bağımlılıkları kur
+      - name: 📦 yt-dlp kur
         run: |
           python -m pip install --upgrade pip
           pip install --upgrade yt-dlp requests
-          npm install -g jsdom
 
-      - name: 🔧 Sürümleri kontrol et
-        run: |
-          yt-dlp --version
-          node --version
+      - name: 🔧 yt-dlp kontrol
+        run: yt-dlp --version
 
       - name: 🍪 Cookies'i hazırla
         run: |
@@ -43,38 +35,16 @@ jobs:
             echo "${{ secrets.YOUTUBE_COOKIES }}" | base64 -d > cookies.txt
             echo "✅ Cookies yüklendi"
           else
-            touch cookies.txt
             echo "⚠️ YOUTUBE_COOKIES secret yok"
           fi
 
-      - name: 🎬 Playlist klasörüne M3U8 listelerini oluştur
-        run: |
-          python update_stream.py
-
-      - name: ✅ Playlist klasörünü kontrol et
-        run: |
-          if [ ! -d playlist ]; then
-            echo "❌ playlist klasörü oluşmadı!"
-            exit 1
-          fi
-          
-          echo "📄 playlist klasöründeki M3U8 dosyaları:"
-          ls -la playlist/
-          
-          if [ -f playlist/playlist.m3u8 ]; then
-            echo "✅ playlist/playlist.m3u8 başarıyla oluşturuldu"
-          fi
+      - name: 🎬 M3U8 listelerini oluştur
+        run: python update_stream.py
 
       - name: 📤 GitHub'a gönder
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-
-          git add playlist/*.m3u8 config.json update_stream.py .github/workflows/update-stream.yml
-
-          if ! git diff --cached --quiet; then
-            git commit -m "🔄 M3U8 playlist güncelleme: $(date '+%Y-%m-%d %H:%M:%S')"
-            git push
-          else
-            echo "✅ Değişiklik yok"
-          fi
+          git add playlist/*.m3u8 config.json update_stream.py
+          git diff --cached --quiet || git commit -m "🔄 M3U8 güncelleme: $(date '+%Y-%m-%d %H:%M:%S')"
+          git push
