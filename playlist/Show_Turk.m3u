@@ -1,3 +1,4 @@
 #EXTM3U
-#EXTINF:-1 tvg-id="show_turk" tvg-name="Show_Turk" tvg-logo="" group-title="Genel",Show_Turk
-https://ciner-live.ercdn.net/showturk/playlist.m3u8?e=1779058455&st=EONmR1kHax2cIiXOOvwzHg&tv=1
+#EXT-X-VERSION:3
+#EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720
+https://ciner-live.ercdn.net/showturk/playlist.m3u8?e=1779058700&st=j-5fYcMcCeQgwhlRkMCYOQ&tv=1

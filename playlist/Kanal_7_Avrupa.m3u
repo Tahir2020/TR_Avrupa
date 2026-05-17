@@ -1,3 +1,4 @@
 #EXTM3U
-#EXTINF:-1 tvg-id="kanal_7_avrupa" tvg-name="Kanal_7_Avrupa" tvg-logo="" group-title="Genel",Kanal_7_Avrupa
+#EXT-X-VERSION:3
+#EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720
 https://livetv.radyotvonline.net/kanal7live/kanal7avr/playlist.m3u8
