@@ -170,51 +170,89 @@ def get_show_turk_token() -> Optional[str]:
 
 def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
     """
-    YouTube manifest URL al - yt-dlp ile cookies kullanarak
+    YouTube manifest URL al - özel yöntemler
     """
-    # Önce video ID'yi al
     video_id_match = re.search(r'(?:v=|\/)([a-zA-Z0-9_-]{11})', youtube_url)
     if not video_id_match:
         return None
     
     video_id = video_id_match.group(1)
     
-    # yt-dlp komutu - daha basit ve güvenilir
-    cmd = [
+    # Yöntem 1: android player
+    cmd1 = [
         "yt-dlp",
         "-g",
         "--cookies", COOKIE_FILE,
-        "-f", "best[protocol=m3u8_native]/best",
+        "--extractor-args", "youtube:player_client=android",
+        "-f", "best[protocol=m3u8_native]",
         f"https://www.youtube.com/watch?v={video_id}"
     ]
-
+    
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=90,
-        )
-        
-        # Önce çıktıyı kontrol et
+        result = subprocess.run(cmd1, capture_output=True, text=True, timeout=60)
         lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
-        
-        for line in lines:
-            if ".m3u8" in line and "manifest" in line:
-                return line
-        
         for line in lines:
             if ".m3u8" in line:
                 return line
-                
-        return None
-
-    except subprocess.TimeoutExpired:
-        print("   ❌ Zaman aşımı")
-        return None
-    except Exception as e:
-        print(f"   ❌ Hata: {e}")
-        return None
+    except Exception:
+        pass
+    
+    # Yöntem 2: web player
+    cmd2 = [
+        "yt-dlp",
+        "-g",
+        "--cookies", COOKIE_FILE,
+        "--extractor-args", "youtube:player_client=web",
+        "-f", "best",
+        f"https://www.youtube.com/watch?v={video_id}"
+    ]
+    
+    try:
+        result = subprocess.run(cmd2, capture_output=True, text=True, timeout=60)
+        lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        for line in lines:
+            if ".m3u8" in line:
+                return line
+    except Exception:
+        pass
+    
+    # Yöntem 3: tv player
+    cmd3 = [
+        "yt-dlp",
+        "-g",
+        "--cookies", COOKIE_FILE,
+        "--extractor-args", "youtube:player_client=tv",
+        "-f", "best",
+        f"https://www.youtube.com/watch?v={video_id}"
+    ]
+    
+    try:
+        result = subprocess.run(cmd3, capture_output=True, text=True, timeout=60)
+        lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        for line in lines:
+            if ".m3u8" in line:
+                return line
+    except Exception:
+        pass
+    
+    # Yöntem 4: --force-generic-extractor
+    cmd4 = [
+        "yt-dlp",
+        "-g",
+        "--force-generic-extractor",
+        f"https://www.youtube.com/watch?v={video_id}"
+    ]
+    
+    try:
+        result = subprocess.run(cmd4, capture_output=True, text=True, timeout=60)
+        lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        for line in lines:
+            if ".m3u8" in line:
+                return line
+    except Exception:
+        pass
+    
+    return None
 
 
 def get_direct_stream_url(url: str) -> Optional[str]:
@@ -244,10 +282,9 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
         return url
     
     # YouTube kanalı
-    youtube_url = channel.get("url", "")
-    if youtube_url and ("youtube.com" in youtube_url or "youtu.be" in youtube_url):
+    if url and ("youtube.com" in url or "youtu.be" in url):
         print("🎬 YouTube manifest alınıyor...")
-        return get_youtube_stream_url(youtube_url, quality)
+        return get_youtube_stream_url(url, quality)
     
     return None
 
@@ -347,8 +384,10 @@ def main() -> int:
 
     if failed_channels:
         print(f"\n⚠️ Alınamayan kanallar ({len(failed_channels)}):")
-        for channel_name in failed_channels:
+        for channel_name in failed_channels[:15]:
             print(f"   - {channel_name}")
+        if len(failed_channels) > 15:
+            print(f"   ... ve {len(failed_channels) - 15} kanal daha")
 
     print(f"\n📄 Oluşan M3U8 dosyaları ({output_folder}/):")
     for file in sorted(output_folder.glob("*.m3u8")):
