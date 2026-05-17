@@ -34,7 +34,7 @@ def load_config() -> Dict:
 
     config.setdefault("quality", "best[height<=1080][fps<=50]/best")
     config.setdefault("output_folder", "playlist")
-    config.setdefault("output_playlist", "playerlist.m3u8")  # .m3u8 yapıldı
+    config.setdefault("output_playlist", "playerlist.m3u")
     return config
 
 
@@ -51,7 +51,7 @@ def safe_filename(name: str) -> str:
         name = name.replace(old, new)
 
     name = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_")
-    return f"{name or 'channel'}.m3u8"  # .m3u8 yapıldı
+    return f"{name or 'channel'}.m3u"
 
 
 def is_direct_m3u8(url: str) -> bool:
@@ -321,7 +321,7 @@ def create_extinf(channel: Dict, stream_url: str) -> str:
     name = channel["name"]
     logo = channel.get("logo", "")
     group = channel.get("group", "Genel")
-    tvg_id = channel.get("tvg_id", safe_filename(name).replace(".m3u8", "").lower())
+    tvg_id = channel.get("tvg_id", safe_filename(name).replace(".m3u", "").lower())
 
     extra = ""
 
@@ -344,9 +344,6 @@ def create_extinf(channel: Dict, stream_url: str) -> str:
 def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Path) -> Path:
     output_folder.mkdir(parents=True, exist_ok=True)
     filename = channel.get("m3u_file") or safe_filename(channel["name"])
-    # Uzantı .m3u8 değilse .m3u8 yap
-    if not filename.endswith('.m3u8'):
-        filename = filename.replace('.m3u', '.m3u8') if '.m3u' in filename else filename + '.m3u8'
     path = output_folder / filename
 
     content = "#EXTM3U\n" + create_extinf(channel, stream_url)
@@ -356,9 +353,6 @@ def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Pat
 
 def write_main_playlist(entries: List[str], output_folder: Path, output_playlist: str) -> Path:
     output_folder.mkdir(parents=True, exist_ok=True)
-    # Uzantı .m3u8 değilse .m3u8 yap
-    if not output_playlist.endswith('.m3u8'):
-        output_playlist = output_playlist.replace('.m3u', '.m3u8') if '.m3u' in output_playlist else output_playlist + '.m3u8'
     path = output_folder / output_playlist
     content = "#EXTM3U\n" + "\n".join(entries)
     path.write_text(content, encoding="utf-8")
@@ -367,7 +361,7 @@ def write_main_playlist(entries: List[str], output_folder: Path, output_playlist
 
 def main() -> int:
     print("=" * 60)
-    print("🎬 TV Kanalları M3U8 Güncelleyici (Token + Cookie Desteği)")
+    print("🎬 TV Kanalları M3U Güncelleyici (Token + Cookie Desteği)")
     print("=" * 60)
     print(f"🕐 Başlangıç: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
@@ -384,10 +378,7 @@ def main() -> int:
 
     output_folder.mkdir(parents=True, exist_ok=True)
 
-    # Eski .m3u dosyalarını temizle (artık .m3u8 kullanıyoruz)
     for old_file in output_folder.glob("*.m3u"):
-        old_file.unlink()
-    for old_file in output_folder.glob("*.m3u8"):
         old_file.unlink()
 
     playlist_entries: List[str] = []
@@ -426,8 +417,8 @@ def main() -> int:
         for channel_name in failed_channels:
             print(f"   - {channel_name}")
 
-    print(f"\n📄 Oluşan M3U8 dosyaları ({output_folder}/):")
-    for file in sorted(output_folder.glob("*.m3u8")):
+    print(f"\n📄 Oluşan M3U dosyaları ({output_folder}/):")
+    for file in sorted(output_folder.glob("*.m3u")):
         print(f"   - {file.name}")
 
     print(f"\n✅ İşlem tamamlandı: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
