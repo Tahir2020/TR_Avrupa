@@ -21,17 +21,23 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 📦 yt-dlp kur (en son sürüm)
+      - name: 📦 yt-dlp kur ve sürümü göster
         run: |
           python -m pip install --upgrade pip
-          pip install --upgrade yt-dlp requests
+          python -m pip install --no-cache-dir -U yt-dlp requests
+          yt-dlp --version
 
       - name: 🍪 Cookies'i hazırla
         run: |
           if [ -n "${{ secrets.YOUTUBE_COOKIES }}" ]; then
             echo "${{ secrets.YOUTUBE_COOKIES }}" | base64 -d > cookies.txt
             echo "✅ Cookies yüklendi"
-            cat cookies.txt | head -5
+            echo "📄 Cookie satır sayısı: $(wc -l < cookies.txt)"
+            if grep -q "youtube.com" cookies.txt; then
+              echo "✅ YouTube cookie domain bulundu"
+            else
+              echo "⚠️ cookies.txt içinde youtube.com domaini görünmüyor"
+            fi
           else
             echo "⚠️ YOUTUBE_COOKIES secret yok"
             exit 1
