@@ -21,21 +21,20 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 📦 yt-dlp kur
+      - name: 📦 yt-dlp kur (en son sürüm)
         run: |
           python -m pip install --upgrade pip
           pip install --upgrade yt-dlp requests
-
-      - name: 🔧 yt-dlp kontrol
-        run: yt-dlp --version
 
       - name: 🍪 Cookies'i hazırla
         run: |
           if [ -n "${{ secrets.YOUTUBE_COOKIES }}" ]; then
             echo "${{ secrets.YOUTUBE_COOKIES }}" | base64 -d > cookies.txt
             echo "✅ Cookies yüklendi"
+            cat cookies.txt | head -5
           else
             echo "⚠️ YOUTUBE_COOKIES secret yok"
+            exit 1
           fi
 
       - name: 🎬 M3U8 listelerini oluştur
