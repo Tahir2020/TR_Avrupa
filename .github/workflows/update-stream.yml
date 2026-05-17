@@ -1,8 +1,11 @@
-name: TV Kanalları - Playlist Güncelleme
+name: TV Kanalları - M3U8 Güncelleme
 
 on:
+  # Her 1 saatte bir çalıştır
   schedule:
-    - cron: '0 */2 * * *'  # Her 2 saatte bir
+    - cron: '0 * * * *'
+  
+  # Manuel tetikleme
   workflow_dispatch:
 
 permissions:
@@ -11,6 +14,7 @@ permissions:
 jobs:
   update-stream:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: 📥 Kodu çek
@@ -21,7 +25,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 📦 yt-dlp kur (güncel)
+      - name: 📦 yt-dlp ve bağımlılıkları kur
         run: |
           python -m pip install --upgrade pip
           pip install --upgrade yt-dlp requests
@@ -33,28 +37,62 @@ jobs:
         run: |
           if [ -n "${{ secrets.YOUTUBE_COOKIES }}" ]; then
             echo "${{ secrets.YOUTUBE_COOKIES }}" | base64 -d > cookies.txt
-            echo "✅ Cookies yüklendi ($(wc -l < cookies.txt) satır)"
+            echo "✅ Cookies yüklendi"
           else
             echo "⚠️ YOUTUBE_COOKIES secret yok - YouTube kanalları kısıtlı çalışabilir"
             touch cookies.txt
           fi
 
-      - name: 🎬 Playlist oluştur
+      - name: 🎬 M3U8 playlist oluştur
         run: python update_stream.py
 
-      - name: ✅ Kontrol
+      - name: ✅ Çıktıları kontrol et
         run: |
-          if [ ! -s playlist/playerlist.m3u ]; then
-            echo "❌ playlist/playerlist.m3u oluşmadı!"
+          if [ ! -s playlist/playlist.m3u8 ]; then
+            echo "❌ playlist/playlist.m3u8 oluşmadı!"
+            ls -la playlist/ || echo "playlist klasörü yok"
             exit 1
           fi
-          echo "✅ Dosya sayısı: $(ls -1 playlist/*.m3u | wc -l)"
-          head -20 playlist/playerlist.m3u
+          
+          echo "=========================================="
+          echo "✅ M3U8 dosyaları oluşturuldu:"
+          echo "=========================================="
+          ls -la playlist/*.m3u8 2>/dev/null | awk '{print "   📺 " $9 " (" $5 " bytes)"}'
+          
+          echo ""
+          echo "Ana playlist ilk 20 satır:"
+          echo "------------------------------------------"
+          head -20 playlist/playlist.m3u8
 
       - name: 📤 GitHub'a gönder
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add playlist/*.m3u config.json update_stream.py
-          git diff --cached --quiet || git commit -m "🔄 Playlist güncelleme: $(date '+%Y-%m-%d %H:%M')"
-          git push
+          
+          # playlist klasöründeki tüm .m3u8 dosyalarını ekle
+          git add playlist/*.m3u8
+          git add config.json update_stream.py
+          
+          # Değişiklik varsa commit ve push
+          if git diff --cached --quiet; then
+            echo "ℹ️ Değişiklik yok, commit gerekmiyor"
+          else
+            TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+            git commit -m "🔄 M3U8 güncelleme | ${TIMESTAMP}"
+            git push
+            echo "✅ Değişiklikler push edildi"
+          fi
+
+      - name: 📊 Sonuç özeti
+        if: always()
+        run: |
+          echo "=========================================="
+          echo "İŞLEM TAMAMLANDI"
+          echo "=========================================="
+          echo "Zaman: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "Durum: ${{ job.status }}"
+          
+          if [ -f "playlist/playlist.m3u8" ]; then
+            KANAL_SAYISI=$(grep -c "^#EXTINF" playlist/playlist.m3u8)
+            echo "Toplam kanal: $KANAL_SAYISI"
+          fi
