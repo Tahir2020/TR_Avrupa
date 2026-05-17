@@ -39,7 +39,6 @@ def load_config() -> Dict:
 
 
 def safe_filename(name: str) -> str:
-    """Güvenli dosya adı oluşturur (sadece harf ve sayı)"""
     replacements = {
         "ç": "c", "Ç": "C", "ğ": "g", "Ğ": "G",
         "ı": "i", "İ": "I", "ö": "o", "Ö": "O",
@@ -158,20 +157,64 @@ def get_show_turk_token() -> Optional[str]:
 
 
 def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
-    """YouTube'dan sadece stream URL'sini alır"""
-    cmd = [
-        "yt-dlp", "-g", "--cookies", COOKIE_FILE,
-        "--extractor-args", "youtube:player_client=android",
-        "-f", quality, youtube_url
+    """YouTube'dan stream URL'sini alır - çoklu format dener"""
+    
+    # Denenecek formatlar (başarılı olana kadar)
+    formats_to_try = [
+        f"best[height<=1080][ext=m3u8]/best[ext=m3u8]",
+        f"best[height<=720][ext=m3u8]",
+        "best[ext=m3u8]",
+        "best",
+        quality
     ]
+    
+    cookies = load_netscape_cookies()
+    cookie_args = ["--cookies", COOKIE_FILE] if cookies else []
+    
+    for fmt in formats_to_try:
+        cmd = [
+            "yt-dlp", "-g",
+            *cookie_args,
+            "--extractor-args", "youtube:player_client=android,web",
+            "--no-check-certificate",
+            "-f", fmt,
+            youtube_url
+        ]
+        
+        try:
+            print(f"   🎬 Denenen format: {fmt}")
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            
+            if result.returncode == 0:
+                for line in result.stdout.splitlines():
+                    line = line.strip()
+                    if line and ("manifest.googlevideo.com" in line or ".m3u8" in line):
+                        # URL'yi temizle
+                        clean_url = line.split('#')[0].strip()
+                        if clean_url.startswith("http"):
+                            print(f"   ✅ YouTube URL alındı")
+                            return clean_url
+        except subprocess.TimeoutExpired:
+            print(f"   ⏱️ Zaman aşımı: {fmt}")
+            continue
+        except Exception as e:
+            print(f"   ⚠️ Hata ({fmt}): {str(e)[:50]}")
+            continue
+    
+    # Son çare: yt-dlp --geo-bypass ile dene
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        for line in result.stdout.splitlines():
-            if "manifest.googlevideo.com" in line and ".m3u8" in line:
-                return line.strip()
-        return None
+        print("   🌍 Coğrafi engeli aşmayı dene...")
+        cmd = ["yt-dlp", "-g", "--geo-bypass", "--extractor-args", "youtube:player_client=android", youtube_url]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        if result.returncode == 0:
+            url = result.stdout.strip().split('\n')[0]
+            if url and url.startswith("http"):
+                print("   ✅ YouTube URL alındı (geo-bypass ile)")
+                return url
     except Exception:
-        return None
+        pass
+    
+    return None
 
 
 def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
@@ -183,28 +226,26 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
 
     # Token gerektiren özel kanallar
     if is_atv_avrupa_name(name):
+        print("🔐 ATV Avrupa token alınıyor...")
         return get_atv_avrupa_token()
     if is_eurostar_name(name):
+        print("🔐 EuroStar token alınıyor...")
         return get_eurostar_token()
     if is_show_turk_name(name):
+        print("🔐 Show Türk token alınıyor...")
         return get_show_turk_token()
 
     # Direkt m3u8
     if is_direct_m3u8(url):
+        print("🔗 Direkt m3u8 linki")
         return url
 
     # YouTube
+    print("🎬 YouTube stream alınıyor...")
     return get_youtube_stream_url(url, quality)
 
 
 def create_clean_hls_playlist(stream_url: str) -> str:
-    """
-    TEMIZ HLS playlist - SADECE:
-    #EXTM3U
-    #EXT-X-VERSION:3
-    #EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720
-    stream_url
-    """
     return f"""#EXTM3U
 #EXT-X-VERSION:3
 #EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720
@@ -212,12 +253,10 @@ def create_clean_hls_playlist(stream_url: str) -> str:
 
 
 def create_main_entry(name: str, stream_url: str) -> str:
-    """Ana playlist için sade entry (logo, tvg-id, group-title YOK)"""
     return f"#EXTINF:-1,{name}\n{stream_url}"
 
 
 def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Path) -> Path:
-    """Tek kanal için TEMIZ M3U dosyası oluşturur"""
     output_folder.mkdir(parents=True, exist_ok=True)
     filename = channel.get("m3u_file") or safe_filename(channel["name"])
     path = output_folder / filename
@@ -228,7 +267,6 @@ def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Pat
 
 
 def write_main_playlist(entries: List[str], output_folder: Path, output_playlist: str) -> Path:
-    """Ana playlist oluşturur (TEMIZ, logosuz)"""
     output_folder.mkdir(parents=True, exist_ok=True)
     path = output_folder / output_playlist
     content = "#EXTM3U\n#EXT-X-VERSION:3\n" + "\n".join(entries)
@@ -255,9 +293,10 @@ def main() -> int:
 
     output_folder.mkdir(parents=True, exist_ok=True)
 
-    # Eski dosyaları temizle
+    # Eski dosyaları temizle (playerlist hariç)
     for old_file in output_folder.glob("*.m3u"):
-        old_file.unlink()
+        if old_file.name != "playerlist.m3u":
+            old_file.unlink()
 
     playlist_entries: List[str] = []
     failed_channels: List[str] = []
@@ -270,7 +309,7 @@ def main() -> int:
             failed_channels.append(name)
             continue
 
-        print(f"\n🔄 [{index}/{len(config['channels'])}] {name} taranıyor...")
+        print(f"\n🔄 [{index}/{len(config['channels'])}] {name}")
         print("-" * 40)
         
         stream_url = get_stream_url(channel, quality)
@@ -280,34 +319,26 @@ def main() -> int:
             failed_channels.append(name)
             continue
 
-        # Tek kanal dosyası oluştur (TEMIZ)
         single_file = write_single_channel_file(channel, stream_url, output_folder)
-        
-        # Ana playlist için entry ekle (TEMIZ)
         playlist_entries.append(create_main_entry(name, stream_url))
-        
         print(f"✅ {name}: {single_file} oluşturuldu")
         time.sleep(0.5)
 
-    # Ana playlist'i oluştur
     if playlist_entries:
         main_playlist = write_main_playlist(playlist_entries, output_folder, output_playlist)
-        print(f"\n✅ Toplu liste oluşturuldu: {main_playlist}")
-        print(f"✅ Başarılı kanal sayısı: {len(playlist_entries)}/{len(config['channels'])}")
+        print(f"\n✅ Toplu liste: {main_playlist}")
+        print(f"✅ Başarılı: {len(playlist_entries)}/{len(config['channels'])}")
     else:
-        print("\n❌ Hiçbir kanal için link alınamadı")
+        print("\n❌ Hiçbir kanal alınamadı")
         return 1
 
     if failed_channels:
-        print("\n⚠️ Alınamayan kanallar:")
-        for channel_name in failed_channels:
-            print(f"   - {channel_name}")
+        print(f"\n⚠️ Alınamayanlar ({len(failed_channels)}):")
+        for ch in failed_channels[:10]:
+            print(f"   - {ch}")
+        if len(failed_channels) > 10:
+            print(f"   ... ve {len(failed_channels)-10} kanal daha")
 
-    print(f"\n📄 Oluşan M3U dosyaları ({output_folder}/):")
-    for file in sorted(output_folder.glob("*.m3u")):
-        print(f"   - {file.name}")
-
-    print(f"\n✅ İşlem tamamlandı: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     return 0
 
 
