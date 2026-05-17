@@ -37,72 +37,68 @@
       "url": "https://demiroren.daioncdn.net/teve2/teve2_1080p.m3u8?&sid=8a5c11fnaetz&app=6aab838a-437e-4a1b-bbd0-e30f79cdbbbd&ce=3"
     },
     {
-      "name": "bein_Sports_Haber",
-      "youtube_url": "https://www.youtube.com/watch?v=i7UpPgxfZZ8"
-    },
-    {
       "name": "A_Spor",
-      "youtube_url": "https://www.youtube.com/watch?v=mgeW8Qm8-SY"
+      "url": "https://www.youtube.com/watch?v=mgeW8Qm8-SY"
     },
     {
       "name": "A_Haber",
-      "youtube_url": "https://www.youtube.com/watch?v=N75gw93XsCk"
+      "url": "https://www.youtube.com/watch?v=N75gw93XsCk"
     },
     {
       "name": "A_Para",
-      "youtube_url": "https://www.youtube.com/watch?v=6-Q8v_e-M2g"
+      "url": "https://www.youtube.com/watch?v=6-Q8v_e-M2g"
     },
     {
       "name": "CNN_Turk",
-      "youtube_url": "https://www.youtube.com/watch?v=PD5LpRhApns"
+      "url": "https://www.youtube.com/watch?v=PD5LpRhApns"
     },
     {
       "name": "Haber_Global",
-      "youtube_url": "https://www.youtube.com/watch?v=EqoCJ8BPxtE"
+      "url": "https://www.youtube.com/watch?v=EqoCJ8BPxtE"
     },
     {
       "name": "Bloomberg_HT",
-      "youtube_url": "https://www.youtube.com/watch?v=hHSmBJk6w0c"
+      "url": "https://www.youtube.com/watch?v=hHSmBJk6w0c"
     },
     {
       "name": "NTV",
-      "youtube_url": "https://www.youtube.com/watch?v=pqq5c6k70kk"
+      "url": "https://www.youtube.com/watch?v=pqq5c6k70kk"
     },
     {
       "name": "TV100",
-      "youtube_url": "https://www.youtube.com/watch?v=ebVRSmBYC60"
+      "url": "https://www.youtube.com/watch?v=ebVRSmBYC60"
     },
     {
       "name": "Ekol_TV",
-      "youtube_url": "https://www.youtube.com/watch?v=5ovykCkBWfU"
+      "url": "https://www.youtube.com/watch?v=5ovykCkBWfU"
     },
     {
       "name": "24_TV",
-      "youtube_url": "https://www.youtube.com/watch?v=6B-nPOdP720"
+      "url": "https://www.youtube.com/watch?v=6B-nPOdP720"
     },
     {
       "name": "Halk_TV",
-      "youtube_url": "https://www.youtube.com/watch?v=8uNelFh0oz4"
+      "url": "https://www.youtube.com/watch?v=8uNelFh0oz4"
     },
     {
       "name": "Sozcu_TV",
-      "youtube_url": "https://www.youtube.com/watch?v=ztmY_cCtUl0"
+      "url": "https://www.youtube.com/watch?v=ztmY_cCtUl0"
     },
     {
       "name": "Ulke_TV",
-      "youtube_url": "https://www.youtube.com/watch?v=YwUf2IfT4Pw"
+      "url": "https://www.youtube.com/watch?v=YwUf2IfT4Pw"
     },
     {
       "name": "TVNET",
-      "youtube_url": "https://www.youtube.com/watch?v=Z5bqy4gwEmc"
+      "url": "https://www.youtube.com/watch?v=Z5bqy4gwEmc"
     },
     {
       "name": "TGRT_Haber",
-      "youtube_url": "https://www.youtube.com/watch?v=FQ-KswvPsow"
+      "url": "https://www.youtube.com/watch?v=FQ-KswvPsow"
     },
     {
       "name": "TRT_Haber",
-      "youtube_url": "https://www.youtube.com/watch?v=rrGdpqwEhag"
+      "url": "https://www.youtube.com/watch?v=rrGdpqwEhag"
     }
   ]
 }
