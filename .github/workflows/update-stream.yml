@@ -73,14 +73,14 @@ jobs:
           echo "✅ playlist/playerlist.m3u başarıyla oluşturuldu"
           head -40 playlist/playerlist.m3u
           echo "📄 playlist klasöründeki M3U dosyaları:"
-          ls -1 playlist/*.m3u
+          ls -1 playlist/*.m3u playlist/*.m3u8 2>/dev/null || true
 
       - name: 📤 GitHub'a gönder
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
-          git add playlist/*.m3u config.json update_stream.py requirements.txt .github/workflows/update-stream.yml
+          git add playlist/*.m3u playlist/*.m3u8 config.json update_stream.py requirements.txt .github/workflows/update-stream.yml
 
           git diff --cached --quiet || git commit -m "🔄 Playlist M3U listelerini güncelle: $(date '+%Y-%m-%d %H:%M:%S')"
 
