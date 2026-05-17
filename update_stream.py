@@ -455,13 +455,20 @@ def create_extinf(channel: Dict, stream_url: str) -> str:
 
 def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Path) -> Path:
     output_folder.mkdir(parents=True, exist_ok=True)
+
     filename = channel.get("m3u_file") or safe_filename(channel["name"])
     path = output_folder / filename
 
-    content = "#EXTM3U\n" + create_extinf(channel, stream_url)
+    content = (
+        "#EXTM3U\n"
+        "#EXT-X-VERSION:3\n"
+        "#EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720\n"
+        f"{stream_url}\n"
+    )
+
     path.write_text(content, encoding="utf-8")
     return path
-
+    
 
 def playlist_display_name(channel: Dict) -> str:
     """Ana playlistte görünecek kanal adını dosya adına göre üretir."""
