@@ -363,19 +363,8 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
 
 
 def create_extinf(channel: Dict, stream_url: str) -> str:
-    name = channel["name"]
-    logo = channel.get("logo", "")
-    group = channel.get("group", "Genel")
-    tvg_id = channel.get("tvg_id", safe_filename(name).replace(".m3u", "").lower())
-
-    extra = ""
-
-    return (
-        f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{name}" '
-        f'tvg-logo="{logo}" group-title="{group}",{name}\n'
-        f'{extra}'
-        f'{stream_url}\n'
-    )
+    name = channel.get("name", "Unknown")
+    return f"#EXTINF:0,{name}\\n{stream_url}"
 
 
 def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Path) -> Path:
@@ -387,9 +376,9 @@ def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Pat
     name = channel.get("name", "Unknown")
 
     content = (
-        "#EXTM3U\n"
-        f"#EXTINF:-1,{name}\n"
-        f"{stream_url}\n"
+        "#EXTM3U\\n"
+        f"#EXTINF:0,{name}\\n"
+        f"{stream_url}\\n"
     )
 
     path.write_text(content, encoding="utf-8")
@@ -402,35 +391,18 @@ def playlist_display_name(channel: Dict) -> str:
     return re.sub(r"\.m3u8?$", "", filename, flags=re.IGNORECASE)
 
 
-def write_main_playlist(channels: List[Dict], output_folder: Path, output_playlist: str) -> Path:
-    """Ana playlisti kanal dosyalarına Raw GitHub linki verecek şekilde yazar.
-
-    Örnek çıktı:
-    #EXTM3U
-    #EXTINF:-1,24_TV
-    https://raw.githubusercontent.com/Tahir2020/TR_Avrupa/refs/heads/main/playlist/24_TV.m3u
-
-    Ayrıca isim uyuşmazlığı yaşanmaması için hem playerlist.m3u hem playlist.m3u8
-    aynı içerikle oluşturulur.
-    """
+def write_main_playlist(entries: List[str], output_folder: Path, output_playlist: str) -> Path:
+    """Ana playlisti direkt stream URL'leriyle yazar."""
     output_folder.mkdir(parents=True, exist_ok=True)
 
-    github_base = "https://raw.githubusercontent.com/Tahir2020/TR_Avrupa/refs/heads/main/playlist"
-
-    lines = ["#EXTM3U"]
-    for channel in channels:
-        filename = channel.get("m3u_file") or safe_filename(channel.get("name", "channel"))
-        display_name = playlist_display_name(channel)
-        lines.append(f"#EXTINF:-1,{display_name}")
-        lines.append(f"{github_base}/{filename}")
-
-    content = "\n".join(lines) + "\n"
+    content = "#EXTM3U\\n" + "\\n".join(entries) + "\\n"
 
     path = output_folder / output_playlist
     path.write_text(content, encoding="utf-8")
 
     aliases = {"playerlist.m3u", "playlist.m3u8"}
     aliases.discard(output_playlist)
+
     for alias in sorted(aliases):
         (output_folder / alias).write_text(content, encoding="utf-8")
 
@@ -504,7 +476,7 @@ def main() -> int:
         print(f"✅ {name}: {single_file} oluşturuldu")
 
     if successful_channels:
-        main_playlist = write_main_playlist(successful_channels, output_folder, output_playlist)
+        main_playlist = write_main_playlist(playlist_entries, output_folder, output_playlist)
         print(f"\n✅ Toplu liste oluşturuldu: {main_playlist}")
         print(f"✅ Başarılı kanal sayısı: {len(successful_channels)}/{len(config['channels'])}")
     else:
