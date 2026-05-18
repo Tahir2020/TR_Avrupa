@@ -344,19 +344,9 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
     return get_youtube_stream_url(url, quality)
 
 def create_extinf(channel: Dict, stream_url: str) -> str:
-    name = channel["name"]
-    logo = channel.get("logo", "")
-    group = channel.get("group", "Genel")
-    tvg_id = channel.get("tvg_id", safe_filename(name).replace(".m3u", "").lower())
+    name = channel.get("name", "Unknown")
+    return f"#EXTINF:0,{name}\n{stream_url}"
 
-    extra = ""
-
-    return (
-        f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{name}" '
-        f'tvg-logo="{logo}" group-title="{group}",{name}\n'
-        f'{extra}'
-        f'{stream_url}\n'
-    )
 
 def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Path) -> Path:
     output_folder.mkdir(parents=True, exist_ok=True)
@@ -398,29 +388,41 @@ def playlist_display_name(channel: Dict) -> str:
     return re.sub(r"\.m3u8?$", "", filename, flags=re.IGNORECASE)
 
 def write_main_playlist(channels: List[Dict], output_folder: Path, output_playlist: str) -> Path:
-    """Ana playlisti direkt stream URL'leriyle yazar."""
+    """Ana playlisti yazar.
+
+    Show Türk raw .m3u üzerinden açılmadığı için ana listede direkt stream URL kullanılır.
+    Diğer kanallar kanal .m3u dosyalarına Raw GitHub linkiyle yazılır.
+    """
     output_folder.mkdir(parents=True, exist_ok=True)
 
     github_base = "https://raw.githubusercontent.com/Tahir2020/TR_Avrupa/refs/heads/main/playlist"
-    
+
     lines = ["#EXTM3U"]
+
     for channel in channels:
         filename = channel.get("m3u_file") or safe_filename(channel.get("name", "channel"))
         display_name = playlist_display_name(channel)
-        lines.append(f"#EXTINF:-1,{display_name}")
-        lines.append(f"{github_base}/{filename}")
 
-    content = "\n".join(lines) + "\n"
+        lines.append(f"#EXTINF:0,{display_name}")
+
+        if is_show_turk_name(channel.get("name", "")) and channel.get("_stream_url"):
+            lines.append(channel["_stream_url"])
+        else:
+            lines.append(f"{github_base}/{filename}")
+
+    content = "\\n".join(lines) + "\\n"
 
     path = output_folder / output_playlist
     path.write_text(content, encoding="utf-8")
 
     aliases = {"playerlist.m3u", "playlist.m3u8"}
     aliases.discard(output_playlist)
+
     for alias in sorted(aliases):
         (output_folder / alias).write_text(content, encoding="utf-8")
 
     return path
+
 
 def main() -> int:
     print("=" * 60)
@@ -482,6 +484,8 @@ def main() -> int:
             print(f"❌ {name}: Stream URL alınamadı")
             failed_channels.append(name)
             continue
+
+        channel["_stream_url"] = stream_url
 
         single_file = write_single_channel_file(channel, stream_url, output_folder)
         playlist_entries.append(create_extinf(channel, stream_url))
