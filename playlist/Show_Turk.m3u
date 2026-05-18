@@ -1,4 +1,5 @@
 #EXTM3U
-#EXT-X-VERSION:3
-#EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720
-https://ciner-live.ercdn.net/showturk/playlist.m3u8?e=1779121530&st=Q-NRLsQfr3MHh4oNWog71w&tv=1
+#EXTINF:0,Show_Turk
+#EXTVLCOPT:http-referrer=https://www.showturk.com.tr/
+#EXTVLCOPT:http-origin=https://www.showturk.com.tr
+https://ciner-live.ercdn.net/showturk/playlist.m3u8?e=1779122000&st=NO7Ho5ny8UjkVg6_rzZ9rg&tv=1
