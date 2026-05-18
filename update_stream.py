@@ -401,12 +401,13 @@ def write_main_playlist(channels: List[Dict], output_folder: Path, output_playli
 
         lines.append(f"#EXTINF:0,{display_name}")
 
+        # Show Türk ana listede direkt stream olarak yazılır.
         if is_show_turk_name(channel.get("name", "")) and channel.get("_stream_url"):
             lines.append(channel["_stream_url"])
         else:
             lines.append(f"{github_base}/{filename}")
 
-    content = "\\n".join(lines) + "\\n"
+    content = "\n".join(lines) + "\n"
 
     path = output_folder / output_playlist
     path.write_text(content, encoding="utf-8")
