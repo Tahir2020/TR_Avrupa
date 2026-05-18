@@ -1,3 +1,4 @@
 #EXTM3U
-#EXTINF:0,Show_Turk
-https://ciner-live.ercdn.net/showturk/playlist.m3u8?e=1779127285&st=4Nb76-zyRMKnYEgxbaRJ8A&tv=1
+#EXTVLCOPT:http-referrer=https://www.showturk.com.tr/
+#EXTINF:-1,Show Türk
+https://ciner-live.ercdn.net/showturk/playlist.m3u8?e=1779128399&st=eBS4kYoeWBn1Ol-0DDfMIA&tv=1
