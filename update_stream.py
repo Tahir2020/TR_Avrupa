@@ -300,21 +300,21 @@ return (
     f'{stream_url}\n'
 )
 
-def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Path) -> Path:output_folder.mkdir(parents=True, exist_ok=True)
+def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Path) -> Path:
+    output_folder.mkdir(parents=True, exist_ok=True)
 
-filename = channel.get("m3u_file") or safe_filename(channel["name"])
-path = output_folder / filename
+    filename = channel.get("m3u_file") or safe_filename(channel["name"])
+    path = output_folder / filename
 
-name = channel.get("name", "Unknown")
+    content = (
+        "#EXTM3U\n"
+        "#EXT-X-VERSION:3\n"
+        "#EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720\n"
+        f"{stream_url}\n"
+    )
 
-content = (
-    "#EXTM3U\n"
-    f"#EXTINF:0,{name}\n"
-    f"{stream_url}\n"
-)
-
-path.write_text(content, encoding="utf-8")
-return path
+    path.write_text(content, encoding="utf-8")
+    return path
 
 def playlist_display_name(channel: Dict) -> str:"""Ana playlistte görünecek kanal adını dosya adına göre üretir."""filename = channel.get("m3u_file") or safe_filename(channel.get("name", "channel"))return re.sub(r".m3u8?$", "", filename, flags=re.IGNORECASE)
 
