@@ -358,19 +358,19 @@ def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Pat
 
     # SADECE Show Türk
     if is_show_turk_name(name):
-    content = (
-        "#EXTM3U\n"
-        "#EXTVLCOPT:http-referrer=https://www.showturk.com.tr/\n"
-        "#EXTINF:-1,Show Türk\n"
-        f"{stream_url}\n"
-    )
-
+        content = (
+            "#EXTM3U\n"
+            "#EXTVLCOPT:http-referrer=https://www.showturk.com.tr/\n"
+            "#EXTINF:-1,Show Türk\n"
+            f"{stream_url}\n"
+        )
+    
     # SADECE Kanal Euro D
     elif name == "Kanal_Euro_D":
         content = "#EXTM3U\n"
         content += f"#EXTINF:0,{name}\n"
         content += f"{stream_url}\n"
-
+    
     # Diğer tüm kanallar eski HLS formatında
     else:
         content = (
