@@ -386,8 +386,6 @@ def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Pat
 
     content = (
         "#EXTM3U\n"
-        "#EXT-X-VERSION:3\n"
-        "#EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720\n"
         f"{stream_url}\n"
     )
 
