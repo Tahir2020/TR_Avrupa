@@ -384,8 +384,11 @@ def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Pat
     filename = channel.get("m3u_file") or safe_filename(channel["name"])
     path = output_folder / filename
 
+    name = channel.get("name", "Unknown")
+
     content = (
         "#EXTM3U\n"
+        f"#EXTINF:-1,{name}\n"
         f"{stream_url}\n"
     )
 
