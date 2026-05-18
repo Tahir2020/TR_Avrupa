@@ -360,17 +360,22 @@ def create_extinf(channel: Dict, stream_url: str) -> str:
 
 def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Path) -> Path:
     output_folder.mkdir(parents=True, exist_ok=True)
-
+    
     filename = channel.get("m3u_file") or safe_filename(channel["name"])
     path = output_folder / filename
-
-    content = (
-        "#EXTM3U\n"
+    
+    content = "#EXTM3U\n"
+    
+    # Show Türk için referrer ekle
+    if is_show_turk_name(channel.get("name", "")):
+        content += "#EXTVLCOPT:http-referrer=https://www.showturk.com.tr/\n"
+    
+    content += (
         "#EXT-X-VERSION:3\n"
         "#EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720\n"
         f"{stream_url}\n"
     )
-
+    
     path.write_text(content, encoding="utf-8")
     return path
 
