@@ -344,9 +344,19 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
     return get_youtube_stream_url(url, quality)
 
 def create_extinf(channel: Dict, stream_url: str) -> str:
-    name = channel.get("name", "Unknown")
-    return f"#EXTINF:0,{name}\\n{stream_url}"
+    name = channel["name"]
+    logo = channel.get("logo", "")
+    group = channel.get("group", "Genel")
+    tvg_id = channel.get("tvg_id", safe_filename(name).replace(".m3u", "").lower())
 
+    extra = ""
+
+    return (
+        f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-name="{name}" '
+        f'tvg-logo="{logo}" group-title="{group}",{name}\n'
+        f'{extra}'
+        f'{stream_url}\n'
+    )
 
 def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Path) -> Path:
     output_folder.mkdir(parents=True, exist_ok=True)
@@ -354,45 +364,45 @@ def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Pat
     filename = channel.get("m3u_file") or safe_filename(channel["name"])
     path = output_folder / filename
 
-    name = channel.get("name", "Unknown")
-
-    content = "#EXTM3U\\n"
-    content += f"#EXTINF:0,{name}\\n"
-
-    # Show Türk bazı playerlarda referrer isteyebilir.
-    if is_show_turk_name(name):
-        content += "#EXTVLCOPT:http-referrer=https://www.showturk.com.tr/\\n"
-        content += "#EXTVLCOPT:http-origin=https://www.showturk.com.tr\\n"
-        content += "#KODIPROP:inputstream.adaptive.stream_headers=Referer=https://www.showturk.com.tr/&Origin=https://www.showturk.com.tr\\n"
-
-    content += f"{stream_url}\\n"
+    content = (
+        "#EXTM3U\n"
+        "#EXT-X-VERSION:3\n"
+        "#EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720\n"
+        f"{stream_url}\n"
+    )
 
     path.write_text(content, encoding="utf-8")
     return path
-
 
 def playlist_display_name(channel: Dict) -> str:
     """Ana playlistte görünecek kanal adını dosya adına göre üretir."""
     filename = channel.get("m3u_file") or safe_filename(channel.get("name", "channel"))
     return re.sub(r"\.m3u8?$", "", filename, flags=re.IGNORECASE)
 
-def write_main_playlist(entries: List[str], output_folder: Path, output_playlist: str) -> Path:
+def write_main_playlist(channels: List[Dict], output_folder: Path, output_playlist: str) -> Path:
     """Ana playlisti direkt stream URL'leriyle yazar."""
     output_folder.mkdir(parents=True, exist_ok=True)
 
-    content = "#EXTM3U\\n" + "\\n".join(entries) + "\\n"
+    github_base = "https://raw.githubusercontent.com/Tahir2020/TR_Avrupa/refs/heads/main/playlist"
+    
+    lines = ["#EXTM3U"]
+    for channel in channels:
+        filename = channel.get("m3u_file") or safe_filename(channel.get("name", "channel"))
+        display_name = playlist_display_name(channel)
+        lines.append(f"#EXTINF:-1,{display_name}")
+        lines.append(f"{github_base}/{filename}")
+
+    content = "\n".join(lines) + "\n"
 
     path = output_folder / output_playlist
     path.write_text(content, encoding="utf-8")
 
     aliases = {"playerlist.m3u", "playlist.m3u8"}
     aliases.discard(output_playlist)
-
     for alias in sorted(aliases):
         (output_folder / alias).write_text(content, encoding="utf-8")
 
     return path
-
 
 def main() -> int:
     print("=" * 60)
@@ -461,7 +471,7 @@ def main() -> int:
         print(f"✅ {name}: {single_file} oluşturuldu")
 
     if successful_channels:
-        main_playlist = write_main_playlist(playlist_entries, output_folder, output_playlist)
+        main_playlist = write_main_playlist(successful_channels, output_folder, output_playlist)
         print(f"\n✅ Toplu liste oluşturuldu: {main_playlist}")
         print(f"✅ Başarılı kanal sayısı: {len(successful_channels)}/{len(config['channels'])}")
     else:
