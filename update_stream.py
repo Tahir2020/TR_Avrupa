@@ -364,12 +364,24 @@ def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Pat
     filename = channel.get("m3u_file") or safe_filename(channel["name"])
     path = output_folder / filename
 
-    content = (
-        "#EXTM3U\n"
-        "#EXT-X-VERSION:3\n"
-        "#EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720\n"
-        f"{stream_url}\n"
-    )
+    name = channel.get("name", "Unknown")
+
+    # SADECE Show Türk farklı format
+    if is_show_turk_name(name):
+        content = "#EXTM3U\n"
+        content += f"#EXTINF:0,{name}\n"
+        content += "#EXTVLCOPT:http-referrer=https://www.showturk.com.tr/\n"
+        content += "#EXTVLCOPT:http-origin=https://www.showturk.com.tr\n"
+        content += f"{stream_url}\n"
+
+    # Diğer tüm kanallar eski HLS formatında
+    else:
+        content = (
+            "#EXTM3U\n"
+            "#EXT-X-VERSION:3\n"
+            "#EXT-X-STREAM-INF:BANDWIDTH=1280000,RESOLUTION=1280x720\n"
+            f"{stream_url}\n"
+        )
 
     path.write_text(content, encoding="utf-8")
     return path
