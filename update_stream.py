@@ -67,6 +67,60 @@ def is_show_turk_name(name: str) -> bool:
     lower = normalize_channel_name(name)
     return "show" in lower and ("türk" in lower or "turk" in lower)
 
+def clean_cookie_file(cookie_file: str = COOKIE_FILE) -> bool:
+    """Geçersiz cookie'leri temizle ve yeni dosya oluştur."""
+    path = Path(cookie_file)
+    if not path.exists():
+        return False
+    
+    # Sorunlu cookie'ler
+    blocked_cookies = ["CONSISTENCY", "ST-sbra4i", "OTZ", "__Secure-YEC", "__Secure-YENID"]
+    
+    try:
+        content = path.read_text(encoding="utf-8", errors="ignore")
+        lines = content.splitlines()
+        
+        # Başlıkları ve geçerli cookie'leri tut
+        cleaned_lines = []
+        header_lines = []
+        cookie_lines = []
+        
+        for line in lines:
+            # Başlık satırlarını koru
+            if line.startswith("#"):
+                header_lines.append(line)
+                continue
+            
+            # Boş satırları atla
+            if not line.strip():
+                continue
+            
+            # Cookie'yi kontrol et
+            parts = line.split("\t")
+            if len(parts) >= 7:
+                cookie_name = parts[5].strip()
+                # Sorunlu cookie'leri filtrele
+                if cookie_name not in blocked_cookies:
+                    cookie_lines.append(line)
+        
+        # Header + cookie'leri birleştir
+        cleaned_lines = header_lines + cookie_lines
+        
+        # Eğer hiç cookie kalmadıysa dosyayı boş bırak
+        if not cookie_lines:
+            path.write_text("", encoding="utf-8")
+            print("   ⚠️ Tüm cookie'ler temizlendi, dosya boşaltıldı")
+            return True
+        
+        # Yeni dosyayı yaz
+        path.write_text("\n".join(cleaned_lines), encoding="utf-8")
+        print(f"   ✅ Cookie dosyası temizlendi: {len(cookie_lines)} cookie korundu")
+        return True
+        
+    except Exception as e:
+        print(f"   ⚠️ Cookie temizleme hatası: {e}")
+        return False
+
 def load_netscape_cookies(cookie_file: str = COOKIE_FILE) -> Dict[str, str]:
     """Netscape format cookies.txt dosyasını requests cookies dict formatına çevirir."""
     cookies: Dict[str, str] = {}
@@ -197,12 +251,17 @@ def _run_ytdlp(cmd: List[str], label: str, timeout: int = 140) -> List[str]:
     stdout = (result.stdout or "").strip()
     stderr = (result.stderr or "").strip()
 
-    if stderr:
+    # Cookie hatasını sessize al
+    if stderr and "invalid Netscape format cookies file" not in stderr:
         # GitHub logunu okunabilir tutmak için çok uzunsa kısalt
         short_err = stderr if len(stderr) <= 900 else stderr[:900] + " ..."
-        print(f"   ⚠️ yt-dlp stderr ({label}): {short_err}")
+        if len(short_err) > 10:  # Sadece anlamlı hataları göster
+            print(f"   ⚠️ yt-dlp stderr ({label}): {short_err}")
 
     if result.returncode != 0:
+        # Cookie hatasını ignore et
+        if "invalid Netscape format cookies file" in stderr:
+            return []
         print(f"   ❌ yt-dlp çıkış kodu ({label}): {result.returncode}")
         return []
 
@@ -228,16 +287,24 @@ def _pick_stream_from_lines(lines: List[str]) -> Optional[str]:
 def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
     """YouTube canlı yayın URL'sini al.
 
-    Ana yöntem kullanıcının çalışan komutu:
-    --js-runtimes deno + --remote-components ejs:github + player_client=default
-
-    Sonra farklı player_client / format kombinasyonları denenir.
+    Cookie hatası durumunda cookie'siz dener.
     """
+    # Cookie dosyasını kontrol et ve temizle
     cookie_args: List[str] = []
-    if Path(COOKIE_FILE).exists() and Path(COOKIE_FILE).stat().st_size > 0:
-        cookie_args = ["--cookies", COOKIE_FILE]
+    cookie_path = Path(COOKIE_FILE)
+    
+    if cookie_path.exists() and cookie_path.stat().st_size > 0:
+        # Cookie'leri temizle
+        clean_cookie_file(COOKIE_FILE)
+        
+        # Tekrar kontrol et
+        if cookie_path.stat().st_size > 0:
+            cookie_args = ["--cookies", COOKIE_FILE]
+            print("   🍪 Cookie kullanılıyor")
+        else:
+            print("   ⚠️ Cookie dosyası boş, cookiesiz devam ediliyor")
     else:
-        print("   ⚠️ cookies.txt boş veya yok; YouTube cookiesiz deneniyor")
+        print("   ⚠️ Cookie dosyası yok veya boş, cookiesiz devam ediliyor")
 
     common = [
         "yt-dlp",
@@ -252,7 +319,7 @@ def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
 
     attempts: List[tuple[str, List[str]]] = []
 
-    # 1) Senin verdiğin çalışan yöntem: Deno + remote ejs + default client
+    # 1) Deno + remote ejs + default client (cookie'li veya cookie'siz)
     attempts.append((
         "deno/ejs/default",
         [
@@ -308,6 +375,28 @@ def get_youtube_stream_url(youtube_url: str, quality: str) -> Optional[str]:
             ],
         ))
 
+    # 5) Son çare: tamamen cookie'siz dene (eğer cookie kullanılıyorsa)
+    if cookie_args:
+        no_cookie_common = [
+            "yt-dlp",
+            "--no-playlist",
+            "--no-warnings",
+            "--user-agent", CHROME_UA,
+            "--referer", "https://www.youtube.com/",
+            "--geo-bypass",
+            "--socket-timeout", "30",
+        ]
+        attempts.append((
+            "no-cookie/default",
+            [
+                *no_cookie_common,
+                "-g",
+                "--extractor-args", "youtube:player_client=default",
+                "-f", "best[protocol=m3u8_native]/best[protocol=m3u8]/best",
+                youtube_url,
+            ],
+        ))
+
     for label, cmd in attempts:
         print(f"   ▶️ YouTube deneme: {label}")
         lines = _run_ytdlp(cmd, label)
@@ -346,7 +435,6 @@ def get_stream_url(channel: Dict, quality: str) -> Optional[str]:
 def create_extinf(channel: Dict, stream_url: str) -> str:
     name = channel.get("name", "Unknown")
     return f"#EXTINF:0,{name}\n{stream_url}"
-
 
 def write_single_channel_file(channel: Dict, stream_url: str, output_folder: Path) -> Path:
     output_folder.mkdir(parents=True, exist_ok=True)
@@ -425,7 +513,6 @@ def write_main_playlist(channels: List[Dict], output_folder: Path, output_playli
 
     return path
 
-
 def main() -> int:
     print("=" * 60)
     print("🎬 TV Kanalları M3U Güncelleyici (Token + Cookie Desteği)")
@@ -449,17 +536,29 @@ def main() -> int:
     except Exception as e:
         print(f"⚠️ yt-dlp sürümü okunamadı: {e}")
 
+    # Cookie dosyasını kontrol et ve temizle
     cookie_path = Path(COOKIE_FILE)
     if cookie_path.exists():
-        cookie_lines = cookie_path.read_text(encoding="utf-8", errors="ignore").splitlines()
         print(f"✅ {COOKIE_FILE} bulundu")
+        
+        # Cookie'leri temizle
+        clean_cookie_file(COOKIE_FILE)
+        
+        # Cookie bilgilerini göster
+        cookie_lines = cookie_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        cookie_count = len([l for l in cookie_lines if l and not l.startswith("#")])
         print(f"📄 Cookie satır sayısı: {len(cookie_lines)}")
-        if any("youtube.com" in line for line in cookie_lines):
-            print("✅ YouTube cookie domain bulundu")
+        print(f"📄 Geçerli cookie sayısı: {cookie_count}")
+        
+        if cookie_count > 0:
+            if any("youtube.com" in line for line in cookie_lines):
+                print("✅ YouTube cookie domain bulundu")
+            else:
+                print("⚠️ YouTube cookie domain bulunamadı")
         else:
-            print("⚠️ YouTube cookie domain bulunamadı")
+            print("⚠️ Geçerli cookie yok, cookiesiz devam edilecek")
     else:
-        print(f"⚠️ {COOKIE_FILE} bulunamadı")
+        print(f"⚠️ {COOKIE_FILE} bulunamadı, cookiesiz devam ediliyor")
 
     output_folder.mkdir(parents=True, exist_ok=True)
 
