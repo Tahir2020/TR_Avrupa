@@ -2,7 +2,7 @@
 #EXTINF:0,Euro_Star_TV
 https://raw.githubusercontent.com/Tahir2020/TR_Avrupa/refs/heads/main/playlist/Euro_Star_TV.m3u
 #EXTINF:0,Show_Turk
-https://ciner-live.ercdn.net/showturk/playlist.m3u8?e=1787811705&st=-vkINfo-SJ6JWr3aiD3hcw&tv=1
+https://ciner-live.ercdn.net/showturk/playlist.m3u8?e=1787854264&st=Id6t3NdJ2-QjAcD0IYSIbQ&tv=1
 #EXTINF:0,Kanal_Euro_D
 https://raw.githubusercontent.com/Tahir2020/TR_Avrupa/refs/heads/main/playlist/Kanal_Euro_D.m3u
 #EXTINF:0,Show_Max
@@ -51,6 +51,8 @@ https://raw.githubusercontent.com/Tahir2020/TR_Avrupa/refs/heads/main/playlist/T
 https://raw.githubusercontent.com/Tahir2020/TR_Avrupa/refs/heads/main/playlist/TGRT_Haber.m3u
 #EXTINF:0,TRT_Haber
 https://raw.githubusercontent.com/Tahir2020/TR_Avrupa/refs/heads/main/playlist/TRT_Haber.m3u
+#EXTINF:0,Flash_Haber
+https://raw.githubusercontent.com/Tahir2020/TR_Avrupa/refs/heads/main/playlist/Flash_Haber.m3u
 #EXTINF:0,Bein_Sports_Haberler
 https://raw.githubusercontent.com/Tahir2020/TR_Avrupa/refs/heads/main/playlist/Bein_Sports_Haberler.m3u
 #EXTINF:0,Ask-i_Memnu
